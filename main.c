@@ -6,7 +6,11 @@ void main()
 {
 	unsigned char i = 0;
 
+#if 0
 	systematic_encoding();
+#else
+	evaluation_encoding();
+#endif
 
 	/*transmission through channel*/
 	for(i = 0; i < CODEWORD_LEN; i++)

@@ -36,10 +36,10 @@ unsigned char error_polynomial[CODEWORD_LEN] =
 {
 	0xFF,
 	0xFF,
-	0xFF,
-	0xFF,
-	0xFF,
 	0x2,
+	0xFF,
+	0xFF,
+	0xFF,
 	0x6
 };
 
@@ -68,10 +68,19 @@ unsigned char evaluation_encoding()
 		}
 	}
 
+#if 1
+	memcpy(encoded_polynomial, codeword, sizeof(unsigned char) * CODEWORD_LEN);
+#else
+	for(i = 0; i < CODEWORD_LEN; i++)
+	{
+		encoded_polynomial[i] = codeword[CODEWORD_LEN - 1 - i];
+	}
+#endif
+
 	printf("Evaluation Encoding Codeword:\n");
 	for(i = 0; i < CODEWORD_LEN; i++)
 	{
-		printf("%x ", codeword[i]);
+		printf("%x ", encoded_polynomial[i]);
 	}
 	printf("\n");
 

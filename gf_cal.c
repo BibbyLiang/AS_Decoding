@@ -238,7 +238,7 @@ int gf_multp_poly_hw(unsigned char* a, unsigned char len_a,
 #endif
 		if(0 >= idx)
 		{
-			printf("product len err: %d\n", idx);
+			//printf("product len err: %d\n", idx);
 			break;
 		}
 		idx = idx - 1;
@@ -272,7 +272,7 @@ int gf_multp_poly_hw(unsigned char* a, unsigned char len_a,
 #endif
 		if(0 >= idx)
 		{
-			printf("product len err: %d\n", idx);
+			//printf("product len err: %d\n", idx);
 			break;
 		}
 		idx = idx - 1;
