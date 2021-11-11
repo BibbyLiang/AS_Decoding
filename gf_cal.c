@@ -287,3 +287,29 @@ int gf_multp_poly_hw(unsigned char* a, unsigned char len_a,
 	
 	return 0;
 }
+
+int real_combine(int n, int k)
+{
+	int i = 0;
+	int combine_num = 0;
+	int tmp_n = 1, tmp_k = 1, tmp_n_k = 1;
+
+	for(i = 1; i < (n + 1); i++)
+	{
+		tmp_n = tmp_n * i;
+	}
+
+	for(i = 1; i < (k + 1); i++)
+	{
+		tmp_k = tmp_k * i;
+	}
+
+	for(i = 1; i < (n - k + 1); i++)
+	{
+		tmp_n_k = tmp_n_k * i;
+	}
+
+	combine_num = tmp_n / tmp_k / tmp_n_k;
+
+	return combine_num;
+}

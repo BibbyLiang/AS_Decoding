@@ -626,6 +626,70 @@ int re_encoding()
 	return 0;
 }
 
+int koetter_interpolation()
+{
+	unsigned int i = 0, j = 0, k = 0, m = 0, n = 0;
+	unsigned int a = 0, b = 0, v = 0;
+	unsigned char g_term[CODEWORD_LEN - MESSAGE_LEN][GF_FIELD][GF_FIELD];//j, degree of x, degree of y
+	for(i = 0; i < (CODEWORD_LEN - MESSAGE_LEN); i++)
+	{
+		for(j = 0; j < GF_FIELD; j++)
+		{
+			for(k = 0; k < GF_FIELD; k++)
+			{
+				if((i == k) && (0 == j))
+				{
+					g_term[i][j][k] = 0;
+				}
+				else
+				{
+					g_term[i][j][k] = 0xFF;
+				}
+			}
+		}
+	}
+	unsigned char discrepancy[CODEWORD_LEN - MESSAGE_LEN];
+	memset(discrepancy, 0xFF, sizeof(unsigned char) * (CODEWORD_LEN - MESSAGE_LEN));
+	unsigned int tmp_sum = 0;
+
+	for(i = 0; i < (CODEWORD_LEN + 1); i++)
+	{
+		for(j = 0; j < CODEWORD_LEN; j++)
+		{
+			if(0 == mul_matrix[i][j])
+			{
+				continue;
+			}
+
+			for(a = 0; a < (mul_matrix[i][j] - 1); a++)
+			{
+				for(b = 0; b < (mul_matrix[i][j] - a - 1); b++)
+				{
+					memset(discrepancy, 0xFF, sizeof(unsigned char) * (CODEWORD_LEN - MESSAGE_LEN));
+					for(v = 0; v < (CODEWORD_LEN - MESSAGE_LEN); v++)
+					{
+						tmp_sum = 0;
+						for(m = a; m < (CODEWORD_LEN - MESSAGE_LEN); m++)
+						{
+							for(n = b; n < (mul_matrix[i][j] - (m + n)); n++)
+							{
+								tmp_sum = tmp_sum
+										+ real_combine(m, a) * real_combine(n, b)
+										* (power_polynomial_table[j + 1][0] * (m - a) % (GF_FIELD - 1))
+										* (beta_matrix[i][j] * (n - b) % (GF_FIELD - 1))
+										* g_term[v][m][n];
+							}
+						}
+						discrepancy[v] = tmp_sum;
+					}
+				}
+			}
+		}
+	}
+	
+	return 0;
+}
+
 int as_decoding()
 {
 	unsigned int i = 0;

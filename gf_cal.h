@@ -26,4 +26,5 @@ extern unsigned char gf_multp_poly(unsigned char* a, unsigned char len_a,
 extern int gf_multp_poly_hw(unsigned char* a, unsigned char len_a,
 				 				  unsigned char* b, unsigned char len_b,
 				 				  unsigned char* product, unsigned char len_product);
+extern int real_combine(int n, int k);
 #endif
