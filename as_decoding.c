@@ -1,11 +1,13 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <math.h>
 #include "gf_cal.h"
 #include "encoding.h"
 #include "as_decoding.h"
 
-#define S_MUL	31
+#define S_MUL	10
+#define K_M		8
 
 unsigned char received_polynomial[CODEWORD_LEN] =
 {
@@ -626,32 +628,106 @@ int re_encoding()
 	return 0;
 }
 
+int lex_order(unsigned int **lex_table, unsigned int d_x, unsigned int d_y)
+{
+	unsigned int i = 0, j = 0;
+
+	for(i = 0; i < d_x; i++)
+	{
+		for(j = 0; j < d_y; j++)
+		{
+			*((unsigned int *)lex_table + i * d_y + j) = 1 * i + (MESSAGE_LEN - 1) * j;
+		}
+	}
+}
+
 int koetter_interpolation()
 {
-	unsigned int i = 0, j = 0, k = 0, m = 0, n = 0;
+	int i = 0, j = 0, k = 0, m = 0, n = 0;
 	unsigned int a = 0, b = 0, v = 0;
-	unsigned char g_term[CODEWORD_LEN - MESSAGE_LEN][GF_FIELD][GF_FIELD];//j, degree of x, degree of y
-	for(i = 0; i < (CODEWORD_LEN - MESSAGE_LEN); i++)
+	unsigned int tmp_sum = 0;
+
+	unsigned int d_x = 0, d_y = 0, c = 0, lm = 0;
+	unsigned int d_x_max = 0, d_y_max = 0;
+	for(i = 0; i < (CODEWORD_LEN + 1); i++)
 	{
-		for(j = 0; j < GF_FIELD; j++)
+		for(j = 0; j < CODEWORD_LEN; j++)
 		{
-			for(k = 0; k < GF_FIELD; k++)
+			tmp_sum = tmp_sum + mul_matrix[i][j] * (mul_matrix[i][j] + 1);
+		}
+	}
+	c = tmp_sum / 2;
+	tmp_sum = pow((1 + 8 * (float)c / (MESSAGE_LEN - 1)), 0.5);
+	tmp_sum = (1 + ((unsigned int)tmp_sum)) / 2;
+	d_y = (unsigned int)(floor(tmp_sum));
+	//d_y = floor((1 + (unsigned int)pow((1 + 8 * (float)c / (MESSAGE_LEN - 1)), 0.5)) / 2);
+	d_x = floor(c / (d_y + 1) + d_y * (CODEWORD_LEN - MESSAGE_LEN - 1) / 2);
+
+	unsigned int lex_order_table[d_x][d_y];
+	lex_order((unsigned int **)lex_order_table, d_x, d_y);
+	printf("lex_order_table:\n");
+	for(i = 0; i < d_x; i++)
+	{
+		for(j = 0; j < d_y; j++)
+		{
+			printf("%d ", lex_order_table[i][j]);
+			if(K_M >= lex_order_table[i][j])
 			{
-				if((i == k) && (0 == j))
+				lm = lm + 1;
+				if(d_x_max < i)
 				{
-					g_term[i][j][k] = 0;
+					d_x_max = i;
 				}
-				else
+				if(d_y_max < j)
 				{
-					g_term[i][j][k] = 0xFF;
+					d_y_max = j;
+				}
+			}
+		}
+		printf("\n");
+	}
+	printf("constraint: %x %x %x %x %x %x\n", c, d_x, d_y, lm, d_x_max, d_y_max);
+	unsigned char g_table_c[lm];
+	unsigned char g_table_x[lm];
+	unsigned char g_table_y[lm];
+	memset(g_table_c, 0, sizeof(unsigned char) * lm);
+	memset(g_table_x, 0, sizeof(unsigned char) * lm);
+	memset(g_table_y, 0, sizeof(unsigned char) * lm);
+	k = 0;
+	for(tmp_sum = 0; tmp_sum <= K_M; tmp_sum++)
+	{
+		for(i = d_x_max; i >= 0; i--)
+		{
+			for(j = d_y_max; j >= 0; j--)
+			{
+				if(tmp_sum == lex_order_table[i][j])
+				{
+					g_table_c[k] = 0;
+					g_table_x[k] = i;
+					g_table_y[k] = j;
+					printf("g_table: %x %x %x %x\n", tmp_sum, k, g_table_x[k], g_table_y[k]);
+					k = k + 1;
 				}
 			}
 		}
 	}
-	unsigned char discrepancy[CODEWORD_LEN - MESSAGE_LEN];
-	memset(discrepancy, 0xFF, sizeof(unsigned char) * (CODEWORD_LEN - MESSAGE_LEN));
-	unsigned int tmp_sum = 0;
-
+	
+	unsigned char g_term[d_y_max + 1];//j, degree of x, degree of y
+	for(i = 0; i <= d_y_max; i++)
+	{
+		for(j = 0; j < lm; j++)
+		{
+			if((0 == g_table_x[j]) && (i == g_table_y[j]))
+			{
+				break;
+			}
+		}
+		g_term[i] = j;
+		printf("g_term: %d %d\n", i, g_term[i]);
+	}
+	
+	unsigned char discrepancy[d_y_max];
+	memset(discrepancy, 0xFF, sizeof(unsigned char) * (d_y_max + 1));
 	for(i = 0; i < (CODEWORD_LEN + 1); i++)
 	{
 		for(j = 0; j < CODEWORD_LEN; j++)
@@ -665,28 +741,30 @@ int koetter_interpolation()
 			{
 				for(b = 0; b < (mul_matrix[i][j] - a - 1); b++)
 				{
-					memset(discrepancy, 0xFF, sizeof(unsigned char) * (CODEWORD_LEN - MESSAGE_LEN));
-					for(v = 0; v < (CODEWORD_LEN - MESSAGE_LEN); v++)
+					memset(discrepancy, 0xFF, sizeof(unsigned char) * (d_y_max + 1));
+					for(v = 0; v < (d_y_max + 1); v++)
 					{
+#if 0//need to be checked
 						tmp_sum = 0;
-						for(m = a; m < (CODEWORD_LEN - MESSAGE_LEN); m++)
+						for(n = b; n < d_y_max; n++)
 						{
-							for(n = b; n < (mul_matrix[i][j] - (m + n)); n++)
+							for(m = a; m < (d_x + d_y - n); m++)
 							{
 								tmp_sum = tmp_sum
 										+ real_combine(m, a) * real_combine(n, b)
 										* (power_polynomial_table[j + 1][0] * (m - a) % (GF_FIELD - 1))
 										* (beta_matrix[i][j] * (n - b) % (GF_FIELD - 1))
-										* g_term[v][m][n];
+										* g_table_c[g_term[v]];
 							}
 						}
+#endif
 						discrepancy[v] = tmp_sum;
 					}
 				}
 			}
 		}
 	}
-	
+
 	return 0;
 }
 
@@ -700,6 +778,8 @@ int as_decoding()
 		printf("%x ", received_polynomial[i]);
 	}
 	printf("\n");
+
+	koetter_interpolation();
 
 	return 0;
 }
