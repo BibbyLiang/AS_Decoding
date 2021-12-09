@@ -19,6 +19,7 @@ void main()
 	}
 
 	mul_assign();
+	
 	re_encoding();
 	
 	as_decoding();

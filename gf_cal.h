@@ -27,4 +27,6 @@ extern int gf_multp_poly_hw(unsigned char* a, unsigned char len_a,
 				 				  unsigned char* b, unsigned char len_b,
 				 				  unsigned char* product, unsigned char len_product);
 extern int real_combine(int n, int k);
+extern unsigned char gf_real_mutp_ff(int n, unsigned char ff);
+unsigned char gf_pow_cal(unsigned char ff, int n);
 #endif

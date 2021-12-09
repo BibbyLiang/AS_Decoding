@@ -313,3 +313,36 @@ int real_combine(int n, int k)
 
 	return combine_num;
 }
+
+unsigned char gf_real_mutp_ff(int n, unsigned char ff)
+{
+	unsigned char val = 0xFF;
+
+	if(0 != (n % 2))
+	{
+		val = ff;
+	}
+	else
+	{
+		val = 0xFF;
+	}
+
+	return val;
+}
+
+unsigned char gf_pow_cal(unsigned char ff, int n)
+{
+	unsigned char val = 0xFF;
+
+	if(0 <= n)
+	{
+		val = (ff * n) % (GF_FIELD - 1);
+	}
+	else
+	{
+		val = (power_polynomial_table[-n + 1][0]) % (GF_FIELD - 1);
+		val = (ff * val) % (GF_FIELD - 1);
+	}
+
+	return val;
+}

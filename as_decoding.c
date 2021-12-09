@@ -6,8 +6,8 @@
 #include "encoding.h"
 #include "as_decoding.h"
 
-#define S_MUL	10
-#define K_M		8
+#define S_MUL	4
+#define K_M		70
 
 unsigned char received_polynomial[CODEWORD_LEN] =
 {
@@ -127,6 +127,7 @@ int chnl_rel_init()
 int mul_assign()
 {
 	unsigned char i = 0, j = 0;
+#if 0	
 	unsigned char s = 0;
 	unsigned char *m_ptr = (unsigned char*)malloc(sizeof(unsigned char));
 	unsigned char *n_ptr = (unsigned char*)malloc(sizeof(unsigned char));
@@ -163,6 +164,29 @@ int mul_assign()
 
 	free(m_ptr);
 	free(n_ptr);
+#else//GS algorithm
+	for(i = 0; i < CODEWORD_LEN; i++)
+	{
+		for(j = 0; j < CODEWORD_LEN + 1; j++)
+		{
+			if(power_polynomial_table[j][0] == received_polynomial[i])
+			{
+				mul_matrix[j][i] = S_MUL;
+			}
+		}
+	}
+
+	printf("Multiplicity Assignment:\n");
+	for(i = 0; i < CODEWORD_LEN; i++)
+	{
+		for(j = 0; j < CODEWORD_LEN + 1; j++)
+		{
+			printf("%d ", mul_matrix[j][i]);
+		}
+		printf("\n");
+	}
+#endif
+	
 	return 0;
 }
 
@@ -534,7 +558,7 @@ int re_encoding()
 
 	syndrome_cal(received_polynomial, syndrome,
 				  CODEWORD_LEN, MESSAGE_LEN);
-
+#if 0//use re-encoding
 #if 0
 	printf("syn_val: ");
 	for(i = 0; i < (GF_FIELD - 1); i++)
@@ -613,7 +637,23 @@ int re_encoding()
 		}
 	}
 #endif
-	
+#else//do not use re-encoding
+	for(j = 0; j < CODEWORD_LEN; j++)
+	{
+		for(i = 0; i < (CODEWORD_LEN + 1); i++)
+		{
+			if(0 != mul_matrix[i][j])
+			{
+				beta_matrix[i][j] = power_polynomial_table[i][0];
+			}
+			else
+			{
+				beta_matrix[i][j] = 0xFF;
+			}
+		}
+	}
+#endif
+
 	printf("beta:\n");
 	for(j = 0; j < CODEWORD_LEN; j++)
 	{
@@ -630,13 +670,42 @@ int re_encoding()
 
 int lex_order(unsigned int **lex_table, unsigned int d_x, unsigned int d_y)
 {
-	unsigned int i = 0, j = 0;
+	unsigned int i = 0, j = 0, k = 0;
+	unsigned int max_degree = 0, degree_index = 0;
+	unsigned int tmp_lex_table[d_x][d_y];
 
+	printf("tmp_lex_table:\n");
 	for(i = 0; i < d_x; i++)
 	{
 		for(j = 0; j < d_y; j++)
 		{
-			*((unsigned int *)lex_table + i * d_y + j) = 1 * i + (MESSAGE_LEN - 1) * j;
+#if 1	
+			tmp_lex_table[i][j] = 1 * i + (MESSAGE_LEN - 1) * j;
+#else//for test
+			*((unsigned int *)lex_table + i * d_y + j) = 1 * i + 1 * j;
+#endif
+			if(max_degree < tmp_lex_table[i][j])
+			{
+				max_degree = tmp_lex_table[i][j];
+			}
+			printf("%d ", tmp_lex_table[i][j]);
+		}
+		printf("\n");
+	}
+	printf("\n");
+
+	for(k = 0; k <= max_degree; k++)
+	{
+		for(j = 0; j < d_y; j++)
+		{
+			for(i = 0; i < d_x; i++)
+			{
+				if(k == tmp_lex_table[i][j])
+				{
+					*((unsigned int *)lex_table + i * d_y + j) = degree_index;
+					degree_index = degree_index + 1;
+				}
+			}
 		}
 	}
 }
@@ -645,9 +714,11 @@ int koetter_interpolation()
 {
 	int i = 0, j = 0, k = 0, m = 0, n = 0;
 	unsigned int a = 0, b = 0, v = 0;
-	unsigned int tmp_sum = 0;
+	unsigned int tmp_sum = 0, tmp_real = 0;
+	unsigned char tmp_ff = 0xFF;
+	unsigned char l_s = 0xFF, l_w = 0;
 
-	unsigned int d_x = 0, d_y = 0, c = 0, lm = 0;
+	unsigned int d_x = 0, d_y = 0, c = 0, term_num = 0, term_num_real = 0;
 	unsigned int d_x_max = 0, d_y_max = 0;
 	for(i = 0; i < (CODEWORD_LEN + 1); i++)
 	{
@@ -663,6 +734,8 @@ int koetter_interpolation()
 	//d_y = floor((1 + (unsigned int)pow((1 + 8 * (float)c / (MESSAGE_LEN - 1)), 0.5)) / 2);
 	d_x = floor(c / (d_y + 1) + d_y * (CODEWORD_LEN - MESSAGE_LEN - 1) / 2);
 
+	
+
 	unsigned int lex_order_table[d_x][d_y];
 	lex_order((unsigned int **)lex_order_table, d_x, d_y);
 	printf("lex_order_table:\n");
@@ -673,7 +746,8 @@ int koetter_interpolation()
 			printf("%d ", lex_order_table[i][j]);
 			if(K_M >= lex_order_table[i][j])
 			{
-				lm = lm + 1;
+				//term_num = term_num + 1;
+#if 0				
 				if(d_x_max < i)
 				{
 					d_x_max = i;
@@ -682,88 +756,279 @@ int koetter_interpolation()
 				{
 					d_y_max = j;
 				}
+#endif
+				if(d_y_max < j)
+				{
+					d_y_max = j;//d_x_max is  not so important as d_y_max
+				}
 			}
 		}
 		printf("\n");
 	}
-	printf("constraint: %x %x %x %x %x %x\n", c, d_x, d_y, lm, d_x_max, d_y_max);
-	unsigned char g_table_c[lm];
-	unsigned char g_table_x[lm];
-	unsigned char g_table_y[lm];
-	memset(g_table_c, 0, sizeof(unsigned char) * lm);
-	memset(g_table_x, 0, sizeof(unsigned char) * lm);
-	memset(g_table_y, 0, sizeof(unsigned char) * lm);
-	k = 0;
-	for(tmp_sum = 0; tmp_sum <= K_M; tmp_sum++)
+	//printf("constraint: %d %d %d %d\n", c, d_x, d_y, term_num);
+	d_x_max = d_x;
+
+	for(i = 0; i < d_x; i++)
 	{
-		for(i = d_x_max; i >= 0; i--)
+		for(j = 0; j < d_y; j++)
 		{
-			for(j = d_y_max; j >= 0; j--)
+			if((S_MUL - 1) >= (i + j))
 			{
-				if(tmp_sum == lex_order_table[i][j])
-				{
-					g_table_c[k] = 0;
-					g_table_x[k] = i;
-					g_table_y[k] = j;
-					printf("g_table: %x %x %x %x\n", tmp_sum, k, g_table_x[k], g_table_y[k]);
-					k = k + 1;
-				}
+				term_num = term_num + 1;
 			}
 		}
 	}
+	for(i = 0; i < (d_y_max + 1); i++)
+	{
+		//for(j = i; j < (d_y_max + 1); j++)
+		for(j = 0; j < (d_y_max + 1); j++)
+		{
+			term_num_real = term_num_real + 1;
+		}
+	}
 	
-	unsigned char g_term[d_y_max + 1];//j, degree of x, degree of y
+	printf("constraint: %d %d %d %d %d %d %d\n", c, d_x, d_y, term_num, term_num_real, d_x_max, d_y_max);
+#if 0
+	unsigned char g_table_c[d_y_max + 1][term_num];
+	unsigned char g_table_x[term_num];
+	unsigned char g_table_y[term_num];
+	unsigned char discrepancy[d_y_max + 1];
+	unsigned char weight_pol[d_y_max + 1];
+	unsigned char tmp_table_c[term_num];
+#endif
+	unsigned char **g_table_c;
+	unsigned char *g_table_x;
+	unsigned char *g_table_y;
+	unsigned char *discrepancy;
+	unsigned char *weight_pol;
+	unsigned char *tmp_table_c;
+
+	g_table_c = (unsigned char**)malloc(sizeof(unsigned char*) * (d_y_max + 1));
+	for (i = 0; i < (d_y_max + 1); i++)
+	{
+  		g_table_c[i] = (unsigned char*)malloc(sizeof(unsigned char) * term_num_real);
+  	}
+	g_table_x = (unsigned char*)malloc(sizeof(unsigned char) * term_num_real);
+	g_table_y = (unsigned char*)malloc(sizeof(unsigned char) * term_num_real);
+	discrepancy = (unsigned char*)malloc(sizeof(unsigned char) * (d_y_max + 1));
+	weight_pol = (unsigned char*)malloc(sizeof(unsigned char) * (d_y_max + 1));
+	tmp_table_c = (unsigned char*)malloc(sizeof(unsigned char) * term_num_real);
+	
+	for(i = 0; i < (d_y_max + 1); i++)
+	{
+		for(j = 0; j < term_num_real; j++)
+		{
+			g_table_c[i][j] = 0xFF;
+		}
+	}
+	memset(g_table_x, 0, sizeof(unsigned char) * term_num_real);
+	memset(g_table_y, 0, sizeof(unsigned char) * term_num_real);
+	memset(discrepancy, 0xFF, sizeof(unsigned char) * (d_y_max + 1));
+	memset(tmp_table_c, 0xFF, sizeof(unsigned char) * term_num_real);
+
+	/*init (a, b) pairs*/
+	k = 0;
+	for(i = 0; i < (d_y_max + 1); i++)
+	{
+		for(j = 0; j < (d_y_max + 1); j++)
+		{
+			//if(S_MUL > (i + j))
+			{
+				g_table_x[k] = i;
+				g_table_y[k] = j;
+				printf("g_table: %d %d %d\n", k, g_table_x[k], g_table_y[k]);
+				k = k + 1;
+			}
+		}
+	}
+	printf("g_table OK\n");
+	
+	//unsigned char g_term[d_y_max + 1];//j, degree of x, degree of y, pick indexes form g_table
 	for(i = 0; i <= d_y_max; i++)
 	{
-		for(j = 0; j < lm; j++)
+		for(j = 0; j < term_num_real; j++)
 		{
 			if((0 == g_table_x[j]) && (i == g_table_y[j]))
 			{
+				g_table_c[i][j] = 0; //set coefficient of initial g to 1
+				printf("g_table_c: %d %d %x\n", i, j, g_table_c[i][j]);
 				break;
 			}
 		}
-		g_term[i] = j;
-		printf("g_term: %d %d\n", i, g_term[i]);
+		//g_term[i] = j;
+		//printf("g_term: %d %d\n", i, g_term[i]);
 	}
-	
-	unsigned char discrepancy[d_y_max];
-	memset(discrepancy, 0xFF, sizeof(unsigned char) * (d_y_max + 1));
-	for(i = 0; i < (CODEWORD_LEN + 1); i++)
+	for(i = 0; i < (d_y_max + 1); i++)
 	{
-		for(j = 0; j < CODEWORD_LEN; j++)
+		weight_pol[i] = (MESSAGE_LEN - 1) * i;
+	}
+	printf("g_term OK\n");
+	//printf("g_table_c[0][0]: %x\n", g_table_c[0][0]);
+
+	for(j = 0; j < CODEWORD_LEN; j++) //for I, as 2^q - 1
+	{
+		for(i = 0; i < (CODEWORD_LEN + 1); i++)//for I, as n
 		{
 			if(0 == mul_matrix[i][j])
 			{
 				continue;
 			}
-
-			for(a = 0; a < (mul_matrix[i][j] - 1); a++)
+			
+			for(k = 0; k < term_num; k++) //for II, as (a, b) pairs
 			{
-				for(b = 0; b < (mul_matrix[i][j] - a - 1); b++)
+				//printf("k ready\n");
+				memset(discrepancy, 0xFF, sizeof(unsigned char) * (d_y_max + 1));
+
+				for(m = 0; m < (d_y_max + 1); m++) //for III, as Q_d_y_max
 				{
-					memset(discrepancy, 0xFF, sizeof(unsigned char) * (d_y_max + 1));
-					for(v = 0; v < (d_y_max + 1); v++)
+					//printf("m ready\n");
+					tmp_sum = 0xFF;
+
+					for(n = 0; n < term_num; n++) //for IV, as (r, s) pairs
 					{
-#if 0//need to be checked
-						tmp_sum = 0;
-						for(n = b; n < d_y_max; n++)
+#if 0						
+						printf("m, n: %d %d %d %d %d %d %d %d\n", m, n,
+																  g_table_x[n], g_table_x[k],
+																  g_table_y[n], g_table_y[k],
+																  g_table_c[m][n], beta_matrix[i][j]);
+#endif						
+						if((g_table_x[n] < g_table_x[k])
+							|| (g_table_y[n] < g_table_y[k])
+							|| (0xFF == g_table_c[m][n])
+							|| ((0xFF == beta_matrix[i][j]) && (g_table_y[n] != g_table_y[k])))
 						{
-							for(m = a; m < (d_x + d_y - n); m++)
-							{
-								tmp_sum = tmp_sum
-										+ real_combine(m, a) * real_combine(n, b)
-										* (power_polynomial_table[j + 1][0] * (m - a) % (GF_FIELD - 1))
-										* (beta_matrix[i][j] * (n - b) % (GF_FIELD - 1))
-										* g_table_c[g_term[v]];
-							}
+							continue;
 						}
+						
+#if 0
+						tmp_sum = tmp_sum
+								+ real_combine(g_table_x[n], g_table_x[k])
+								* real_combine(g_table_y[n], g_table_y[k])
+								* g_table_c[n]
+								* (power_polynomial_table[i + 1][0])^(g_table_x[n] - g_table_x[k])
+								* (beta_matrix[i][j])^(g_table_y[n] - g_table_y[k]);
 #endif
-						discrepancy[v] = tmp_sum;
+						tmp_real = real_combine(g_table_x[n], g_table_x[k]) * real_combine(g_table_y[n], g_table_y[k]);
+						//printf("tmp_real: %d %d %d %d %d %d %d\n", tmp_real, g_table_x[n], g_table_x[k], g_table_y[n], g_table_y[k], real_combine(g_table_x[n], g_table_x[k]), real_combine(g_table_y[n], g_table_y[k]));
+						tmp_ff = gf_real_mutp_ff(tmp_real, g_table_c[m][n]);
+						//printf("tmp_ff: %x %d %x\n", tmp_ff, tmp_real, g_table_c[m][n]);
+						tmp_ff = gf_multp(tmp_ff, gf_pow_cal(power_polynomial_table[j + 1][0], (g_table_x[n] - g_table_x[k])));
+						//printf("tmp_ff: %x %x %x %x\n", tmp_ff, gf_pow_cal(power_polynomial_table[i + 1][0], (g_table_x[n] - g_table_x[k])), power_polynomial_table[i + 1][0], (g_table_x[n] - g_table_x[k]));
+						tmp_ff = gf_multp(tmp_ff, gf_pow_cal(beta_matrix[i][j], (g_table_y[n] - g_table_y[k])));
+						//printf("tmp_ff: %x %x %x %x\n", tmp_ff, gf_pow_cal(beta_matrix[i][j], (g_table_y[n] - g_table_y[k])), beta_matrix[i][j], (g_table_y[n] - g_table_y[k]));
+						tmp_sum = gf_add(tmp_sum, tmp_ff);
+						//printf("tmp_sum: %x %x %x\n", tmp_sum, tmp_ff);
+					}
+					
+					if(0xFF != tmp_sum)
+					{
+						discrepancy[m] = tmp_sum;
+						printf("d: %d %d %d %d %d %x\n", i, j, g_table_x[k], g_table_y[k], m, discrepancy[m]);
+					}
+
+					if((0xFF != discrepancy[m])//find l_s
+						&& (l_w >= weight_pol[m]))
+					{
+						l_s = m;
+						l_w = weight_pol[m];
+						printf("updating l: %d %d\n", l_s, l_w);
+					}
+					//printf("g_table_c[0][0]: %x\n", g_table_c[0][0]);
+				}
+
+				//printf("g_table_c[0][0]: %x\n", g_table_c[0][0]);
+				printf("update polynomial ready: %d %d\n", l_s, l_w);
+				for(m = 0; m < (d_y_max + 1); m++)//update normal Q_l
+				{
+					if(m == l_s)
+					{
+						continue;
+					}
+
+					for(n = 0; n < term_num; n++)
+					{
+						g_table_c[m][n] = gf_multp(g_table_c[m][n], discrepancy[l_s]);
+					}
+
+					for(n = 0; n < term_num; n++)
+					{
+						tmp_table_c[n] = gf_multp(g_table_c[l_s][n], discrepancy[m]);
+					}
+
+					for(n = 0; n < term_num; n++)
+					{
+						g_table_c[m][n] = gf_add(g_table_c[m][n], tmp_table_c[n]);
+					}
+
+					for(n = 0; n < term_num_real; n++)
+					{
+						if(0xFF != g_table_c[m][n])
+						{
+							printf("Q_l: %d %d %d %x\n", m, g_table_x[n], g_table_y[n], g_table_c[m][n]);
+						}
 					}
 				}
+				//printf("update normal Q_l OK\n");
+
+				//printf("g_table_c[0][0]: %x\n", g_table_c[0][0]);
+				memset(tmp_table_c, 0xFF, sizeof(unsigned char) * term_num_real);
+				for(n = 0; n < term_num_real; n++)//update Q_l_s
+				{
+					if(0xFF != g_table_c[l_s][n])
+					{
+						//printf("update Q_l_s: %d %d %d %d %x\n", l_s, n, g_table_x[n], g_table_y[n], g_table_c[l_s][n]);
+						for(m = 0; m < term_num_real; m++)
+						{
+							if((g_table_x[m] == (g_table_x[n] + 1))
+								&& (g_table_y[m] == g_table_y[n]))
+							{
+								tmp_table_c[m] = g_table_c[l_s][n];
+								//printf("update tmp_table_c: %d %d %d %d %x\n", m, n, g_table_x[m], g_table_y[m], tmp_table_c[m]);
+								break;
+							}
+						}
+
+						//printf("updating g_table_c[l_s][n]: %x %x\n", g_table_c[l_s][n], power_polynomial_table[j + 1][0]);
+						g_table_c[l_s][n] = gf_multp(g_table_c[l_s][n], power_polynomial_table[j + 1][0]);
+						//printf("update_1 g_table_c[l_s][n]: %x\n", g_table_c[l_s][n]);
+						g_table_c[l_s][n] = gf_add(g_table_c[l_s][n], tmp_table_c[n]);
+						g_table_c[l_s][m] = tmp_table_c[m];
+						//printf("update_2 g_table_c[l_s][index]: %d %d %x %x\n", n, m, g_table_c[l_s][n], g_table_c[l_s][m]);
+						break;
+					}
+				}
+				for(n = 0; n < term_num_real; n++)
+				{
+					if(0xFF != g_table_c[l_s][n])
+					{
+						printf("Q_l_s_c: %d %d %d %x\n", l_s, g_table_x[n], g_table_y[n], g_table_c[l_s][n]);
+					}
+				}
+				//printf("update Q_l_s OK\n");
+				
+				weight_pol[l_s] = weight_pol[l_s] + 1;//update w_l_s
+				//printf("update w_l_s OK\n");
 			}
 		}
 	}
+
+	for (i = 0; i < (d_y_max + 1); i++)
+	{
+  		free(g_table_c[i]);
+		g_table_c[i] = NULL;
+  	}
+	free(g_table_c);
+	g_table_c = NULL;
+	free(g_table_x);
+	g_table_x = NULL;
+	free(g_table_y);
+	g_table_y = NULL;
+	free(discrepancy);
+	discrepancy = NULL;
+	free(weight_pol);
+	weight_pol= NULL;
+	free(tmp_table_c);
+	tmp_table_c= NULL;
 
 	return 0;
 }
