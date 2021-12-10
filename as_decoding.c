@@ -768,16 +768,6 @@ int koetter_interpolation()
 	//printf("constraint: %d %d %d %d\n", c, d_x, d_y, term_num);
 	d_x_max = d_x;
 
-	for(i = 0; i < d_x; i++)
-	{
-		for(j = 0; j < d_y; j++)
-		{
-			if((S_MUL - 1) >= (i + j))
-			{
-				term_num = term_num + 1;
-			}
-		}
-	}
 	for(i = 0; i < (d_y_max + 1); i++)
 	{
 		//for(j = i; j < (d_y_max + 1); j++)
@@ -787,7 +777,7 @@ int koetter_interpolation()
 		}
 	}
 	
-	printf("constraint: %d %d %d %d %d %d %d\n", c, d_x, d_y, term_num, term_num_real, d_x_max, d_y_max);
+	printf("constraint: %d %d %d %d %d %d\n", c, d_x, d_y, term_num_real, d_x_max, d_y_max);
 #if 0
 	unsigned char g_table_c[d_y_max + 1][term_num];
 	unsigned char g_table_x[term_num];
@@ -802,6 +792,7 @@ int koetter_interpolation()
 	unsigned char *discrepancy;
 	unsigned char *weight_pol;
 	unsigned char *tmp_table_c;
+	unsigned char *term_use_index;//malloc later
 
 	g_table_c = (unsigned char**)malloc(sizeof(unsigned char*) * (d_y_max + 1));
 	for (i = 0; i < (d_y_max + 1); i++)
@@ -813,7 +804,7 @@ int koetter_interpolation()
 	discrepancy = (unsigned char*)malloc(sizeof(unsigned char) * (d_y_max + 1));
 	weight_pol = (unsigned char*)malloc(sizeof(unsigned char) * (d_y_max + 1));
 	tmp_table_c = (unsigned char*)malloc(sizeof(unsigned char) * term_num_real);
-	
+
 	for(i = 0; i < (d_y_max + 1); i++)
 	{
 		for(j = 0; j < term_num_real; j++)
@@ -841,7 +832,6 @@ int koetter_interpolation()
 			}
 		}
 	}
-	printf("g_table OK\n");
 	
 	//unsigned char g_term[d_y_max + 1];//j, degree of x, degree of y, pick indexes form g_table
 	for(i = 0; i <= d_y_max; i++)
@@ -862,7 +852,6 @@ int koetter_interpolation()
 	{
 		weight_pol[i] = (MESSAGE_LEN - 1) * i;
 	}
-	printf("g_term OK\n");
 	//printf("g_table_c[0][0]: %x\n", g_table_c[0][0]);
 
 	for(j = 0; j < CODEWORD_LEN; j++) //for I, as 2^q - 1
@@ -873,7 +862,32 @@ int koetter_interpolation()
 			{
 				continue;
 			}
+
+			/*the (a, b) pairs should be init here*/
+			for(m = 0; m < d_x; m++)
+			{
+				for(n = 0; n < d_y; n++)
+				{
+					if((mul_matrix[i][j] - 1) >= (m + n))
+					{
+						term_num = term_num + 1;
+					}
+				}
+			}
+			term_use_index = (unsigned char*)malloc(sizeof(unsigned char) * term_num);
+			m = 0;
+			for(k = 0; k < term_num_real; k++)
+			{
+				if((mul_matrix[i][j] - 1) >= (g_table_x[k] + g_table_y[k]))
+				{
+					term_use_index[m] = k;
+					printf("term_use_index: %d %d %d %d\n", m, term_use_index[m], g_table_x[k], g_table_y[k]);
+					m = m + 1;
+				}
+			}
 			
+			/*notice that only (a, b) pairs is constained by (a + b) < m directly.*/
+			/*(r, s) pairs is related to the point (a, b), but not the constrain.*/
 			for(k = 0; k < term_num; k++) //for II, as (a, b) pairs
 			{
 				//printf("k ready\n");
@@ -884,18 +898,21 @@ int koetter_interpolation()
 					//printf("m ready\n");
 					tmp_sum = 0xFF;
 
-					for(n = 0; n < term_num; n++) //for IV, as (r, s) pairs
+					for(n = 0; n < term_num_real; n++) //for IV, as (r, s) pairs
 					{
-#if 0						
-						printf("m, n: %d %d %d %d %d %d %d %d\n", m, n,
-																  g_table_x[n], g_table_x[k],
-																  g_table_y[n], g_table_y[k],
-																  g_table_c[m][n], beta_matrix[i][j]);
+#if 0					
+						if(0 == k)
+						{
+							printf("m, n: %d %d %d %d %d %d %d %d\n", m, n,
+																	  g_table_x[n], g_table_x[term_use_index[k]],
+																	  g_table_y[n], g_table_y[term_use_index[k]],
+																	  g_table_c[m][n], beta_matrix[i][j]);
+						}
 #endif						
-						if((g_table_x[n] < g_table_x[k])
-							|| (g_table_y[n] < g_table_y[k])
+						if((g_table_x[n] < g_table_x[term_use_index[k]])
+							|| (g_table_y[n] < g_table_y[term_use_index[k]])
 							|| (0xFF == g_table_c[m][n])
-							|| ((0xFF == beta_matrix[i][j]) && (g_table_y[n] != g_table_y[k])))
+							|| ((0xFF == beta_matrix[i][j]) && (g_table_y[n] != g_table_y[term_use_index[k]])))
 						{
 							continue;
 						}
@@ -908,13 +925,13 @@ int koetter_interpolation()
 								* (power_polynomial_table[i + 1][0])^(g_table_x[n] - g_table_x[k])
 								* (beta_matrix[i][j])^(g_table_y[n] - g_table_y[k]);
 #endif
-						tmp_real = real_combine(g_table_x[n], g_table_x[k]) * real_combine(g_table_y[n], g_table_y[k]);
+						tmp_real = real_combine(g_table_x[n], g_table_x[term_use_index[k]]) * real_combine(g_table_y[n], g_table_y[term_use_index[k]]);
 						//printf("tmp_real: %d %d %d %d %d %d %d\n", tmp_real, g_table_x[n], g_table_x[k], g_table_y[n], g_table_y[k], real_combine(g_table_x[n], g_table_x[k]), real_combine(g_table_y[n], g_table_y[k]));
 						tmp_ff = gf_real_mutp_ff(tmp_real, g_table_c[m][n]);
 						//printf("tmp_ff: %x %d %x\n", tmp_ff, tmp_real, g_table_c[m][n]);
-						tmp_ff = gf_multp(tmp_ff, gf_pow_cal(power_polynomial_table[j + 1][0], (g_table_x[n] - g_table_x[k])));
+						tmp_ff = gf_multp(tmp_ff, gf_pow_cal(power_polynomial_table[j + 1][0], (g_table_x[n] - g_table_x[term_use_index[k]])));
 						//printf("tmp_ff: %x %x %x %x\n", tmp_ff, gf_pow_cal(power_polynomial_table[i + 1][0], (g_table_x[n] - g_table_x[k])), power_polynomial_table[i + 1][0], (g_table_x[n] - g_table_x[k]));
-						tmp_ff = gf_multp(tmp_ff, gf_pow_cal(beta_matrix[i][j], (g_table_y[n] - g_table_y[k])));
+						tmp_ff = gf_multp(tmp_ff, gf_pow_cal(beta_matrix[i][j], (g_table_y[n] - g_table_y[term_use_index[k]])));
 						//printf("tmp_ff: %x %x %x %x\n", tmp_ff, gf_pow_cal(beta_matrix[i][j], (g_table_y[n] - g_table_y[k])), beta_matrix[i][j], (g_table_y[n] - g_table_y[k]));
 						tmp_sum = gf_add(tmp_sum, tmp_ff);
 						//printf("tmp_sum: %x %x %x\n", tmp_sum, tmp_ff);
@@ -923,7 +940,7 @@ int koetter_interpolation()
 					if(0xFF != tmp_sum)
 					{
 						discrepancy[m] = tmp_sum;
-						printf("d: %d %d %d %d %d %x\n", i, j, g_table_x[k], g_table_y[k], m, discrepancy[m]);
+						printf("d: %d %d %d %d %d %x\n", i, j, g_table_x[term_use_index[k]], g_table_y[term_use_index[k]], m, discrepancy[m]);
 					}
 
 					if((0xFF != discrepancy[m])//find l_s
@@ -945,17 +962,17 @@ int koetter_interpolation()
 						continue;
 					}
 
-					for(n = 0; n < term_num; n++)
+					for(n = 0; n < term_num_real; n++)
 					{
 						g_table_c[m][n] = gf_multp(g_table_c[m][n], discrepancy[l_s]);
 					}
 
-					for(n = 0; n < term_num; n++)
+					for(n = 0; n < term_num_real; n++)
 					{
 						tmp_table_c[n] = gf_multp(g_table_c[l_s][n], discrepancy[m]);
 					}
 
-					for(n = 0; n < term_num; n++)
+					for(n = 0; n < term_num_real; n++)
 					{
 						g_table_c[m][n] = gf_add(g_table_c[m][n], tmp_table_c[n]);
 					}
@@ -988,9 +1005,9 @@ int koetter_interpolation()
 							}
 						}
 
-						//printf("updating g_table_c[l_s][n]: %x %x\n", g_table_c[l_s][n], power_polynomial_table[j + 1][0]);
+						//printf("updating g_table_c[l_s][term_use_index[n]]: %x %x\n", g_table_c[l_s][term_use_index[n]], power_polynomial_table[j + 1][0]);
 						g_table_c[l_s][n] = gf_multp(g_table_c[l_s][n], power_polynomial_table[j + 1][0]);
-						//printf("update_1 g_table_c[l_s][n]: %x\n", g_table_c[l_s][n]);
+						//printf("update_1 g_table_c[l_s][n]: %x\n", g_table_c[l_s][term_use_index[n]]);
 						g_table_c[l_s][n] = gf_add(g_table_c[l_s][n], tmp_table_c[n]);
 						g_table_c[l_s][m] = tmp_table_c[m];
 						//printf("update_2 g_table_c[l_s][index]: %d %d %x %x\n", n, m, g_table_c[l_s][n], g_table_c[l_s][m]);
@@ -1009,6 +1026,9 @@ int koetter_interpolation()
 				weight_pol[l_s] = weight_pol[l_s] + 1;//update w_l_s
 				//printf("update w_l_s OK\n");
 			}
+
+			free(term_use_index);
+			term_use_index = NULL;
 		}
 	}
 
