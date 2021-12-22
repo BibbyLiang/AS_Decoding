@@ -333,6 +333,17 @@ unsigned char gf_real_mutp_ff(int n, unsigned char ff)
 unsigned char gf_pow_cal(unsigned char ff, int n)
 {
 	unsigned char val = 0xFF;
+	if(0xFF == ff)
+	{
+		if(0 != n)
+		{
+			return 0xFF;
+		}
+		else
+		{
+			return 0x1;
+		}
+	}
 
 	if(0 <= n)
 	{
