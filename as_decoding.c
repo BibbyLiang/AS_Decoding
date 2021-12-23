@@ -7,7 +7,8 @@
 #include "as_decoding.h"
 
 #define S_MUL		1
-#define K_M			7
+#define K_M			15
+#define LAYER_NUM	5
 #define POLY_NUM	10
 #define TERM_SIZE	16//REAL_SIZE = TERM_SIZE^2
 #define ROOT_SIZE	16//REAL_SIZE = TERM_SIZE^2
@@ -47,11 +48,11 @@ unsigned char omega[CODEWORD_LEN - MESSAGE_LEN];
 unsigned char sigma[((CODEWORD_LEN - MESSAGE_LEN) + (CODEWORD_LEN - MESSAGE_LEN + 1) - 1) - (CODEWORD_LEN - MESSAGE_LEN)];
 unsigned char erasure_polynomial[CODEWORD_LEN];
 unsigned char phi[CODEWORD_LEN];
-unsigned char g_term_c[POLY_NUM][TERM_SIZE * TERM_SIZE];
+unsigned char g_term_c[LAYER_NUM][POLY_NUM][TERM_SIZE * TERM_SIZE];
 unsigned char g_term_x[TERM_SIZE * TERM_SIZE];
 unsigned char g_term_y[TERM_SIZE * TERM_SIZE];
-unsigned char g_term_0_y_c[POLY_NUM][TERM_SIZE * TERM_SIZE];
-unsigned char g_term_x_0_c[POLY_NUM][TERM_SIZE * TERM_SIZE];
+unsigned char g_term_0_y_c[LAYER_NUM][POLY_NUM][TERM_SIZE * TERM_SIZE];
+unsigned char g_term_x_0_c[LAYER_NUM][POLY_NUM][TERM_SIZE * TERM_SIZE];
 unsigned char f_root_val[ROOT_SIZE][ROOT_SIZE];
 unsigned char f_root_prev[ROOT_SIZE][ROOT_SIZE];
 unsigned char f_root_cnt[ROOT_SIZE + 1];//used for next layer
@@ -1123,8 +1124,18 @@ int koetter_interpolation()
 		}
 	}
 
-	/*copy the interpolated polynomials to global memory*/
+	/*find the place of smallest polynomial*/
 	tmp_real = 0xFF;
+	for(m = 0; m < (d_y_max + 1); m++)
+	{
+		if(tmp_real > weight_pol[m])
+		{
+			sml_poly = m;
+			tmp_real = weight_pol[m];
+		}
+	}
+	/*copy the interpolated polynomials to global memory*/
+#if 0	
 	for(m = 0; m < (d_y_max + 1); m++)
 	{
 		for(n = 0; n < term_num_real; n++)
@@ -1146,13 +1157,28 @@ int koetter_interpolation()
 				}
 			}
 		}
-
-		if(tmp_real > weight_pol[m])
+	}
+#else
+	for(n = 0; n < term_num_real; n++)
+	{
+		if(0xFF != g_table_c[sml_poly][n])
 		{
-			sml_poly = m;
-			tmp_real = weight_pol[m];
+			for(k = 0; k < (TERM_SIZE * TERM_SIZE); k++)
+			{
+				if((g_table_x[n] == g_term_x[k])
+					&& (g_table_y[n] == g_term_y[k]))
+				{
+					g_term_c[0][0][k] = g_table_c[sml_poly][n];
+					printf("g_term: %d | %d %d | %x\n", sml_poly,
+														g_term_x[k],
+														g_term_y[k],
+														g_term_c[0][0][k]);
+					break;
+				}
+			}
 		}
 	}
+#endif
 
 	/*free resources*/
 	for (i = 0; i < (d_y_max + 1); i++)
@@ -1180,12 +1206,16 @@ int g_term_init()
 {
 	unsigned int i = 0, j = 0, k = 0;
 
-	for(i = 0; i < POLY_NUM; i++)
+	for(k = 0; k < LAYER_NUM; k++)
 	{
-		for(j = 0; j < (TERM_SIZE * TERM_SIZE); j++)
+		for(i = 0; i < POLY_NUM; i++)
 		{
-			g_term_c[i][j] = 0xFF;
-			g_term_0_y_c[i][j] = 0xFF;
+			for(j = 0; j < (TERM_SIZE * TERM_SIZE); j++)
+			{
+				g_term_c[k][i][j] = 0xFF;
+				g_term_0_y_c[k][i][j] = 0xFF;
+				g_term_x_0_c[k][i][j] = 0xFF;
+			}
 		}
 	}
 
@@ -1221,7 +1251,7 @@ int f_root_init()
 	return 0;
 }
 
-int g_term_new_gen(unsigned char tern_idx, unsigned char root_insert)
+int g_term_new_gen(unsigned char layer_idx, unsigned char tern_idx, unsigned char root_insert)
 {
 	unsigned int i = 0, j = 0, k = 0, l = 0, r = 0, s = 0;
 
@@ -1283,15 +1313,17 @@ int g_term_new_gen(unsigned char tern_idx, unsigned char root_insert)
 
 	for(k = 0; k < (TERM_SIZE * TERM_SIZE); k++)//for every term contain "y"
 	{
+		g_term_c[layer_idx + 1][tern_idx][k] = g_term_c[layer_idx][tern_idx][k];
+		
 		if((0 != g_term_y[k])
-			&& (0xFF != g_term_c[tern_idx][k]))
+			&& (0xFF != g_term_c[layer_idx][tern_idx][k]))
 		{
 			printf("*********************\n");
 			printf("g_term_have_y: %d | %d %d | %x\n",
 				    tern_idx,
 				    g_term_x[k],
 				    g_term_y[k],
-				    g_term_c[tern_idx][k]);
+				    g_term_c[layer_idx][tern_idx][k]);
 			
 			for(l = 0; l < (g_term_y[k] - 0); l++)//for pow_cal, g*m => tmp
 			{
@@ -1358,7 +1390,7 @@ int g_term_new_gen(unsigned char tern_idx, unsigned char root_insert)
 						&& (g_term_y[r] == g_term_y[s]))
 						{
 							g_term_c_expand_store[s] = gf_add(g_term_c_expand_store[s], g_term_c_expand[r]);
-							g_term_c_expand_store[s] = gf_multp(g_term_c_expand_store[s], g_term_c[tern_idx][k]);
+							g_term_c_expand_store[s] = gf_multp(g_term_c_expand_store[s], g_term_c[layer_idx][tern_idx][k]);
 							printf("g_term_expand_store: %d %d | %x\n",
 							    	g_term_x[s],
 							    	g_term_y[s],
@@ -1412,11 +1444,12 @@ int g_term_new_gen(unsigned char tern_idx, unsigned char root_insert)
 			}
 
 			/*clear terms have y*/
-			g_term_c[tern_idx][k] = 0xFF;
+			g_term_c[layer_idx + 1][tern_idx][k] = 0xFF;
 
 		}
 	}
 
+	printf("*********************\n");
 	/*update g_term*/
 	for(r = 0; r < (TERM_SIZE * TERM_SIZE); r++)
 	{
@@ -1428,22 +1461,23 @@ int g_term_new_gen(unsigned char tern_idx, unsigned char root_insert)
 		}
 #endif
 		
-		g_term_c[tern_idx][r] = gf_add(g_term_c_expand_store[r], g_term_c[tern_idx][r]);
-		if(0xFF != g_term_c[tern_idx][r])
+		g_term_c[layer_idx + 1][tern_idx][r] = gf_add(g_term_c_expand_store[r], g_term_c[layer_idx + 1][tern_idx][r]);
+		if(0xFF != g_term_c[layer_idx + 1][tern_idx][r])
 		{
 			printf("g_term_update: %d | %d %d | %x\n",
 				    tern_idx,
 				    g_term_x[r],
 				    g_term_y[r],
-				    g_term_c[tern_idx][r]);
+				    g_term_c[layer_idx + 1][tern_idx][r]);
 		}
 	}
 
+	printf("*********************\n");
 	/*eliminate common factor*/
 	unsigned char cmn_factor = 0xFF;//deal with x
 	for(r = 0; r < (TERM_SIZE * TERM_SIZE); r++)
 	{
-		if(0xFF != g_term_c[tern_idx][r])
+		if(0xFF != g_term_c[layer_idx + 1][tern_idx][r])
 		{
 			if(cmn_factor > g_term_x[r])
 			{
@@ -1456,20 +1490,20 @@ int g_term_new_gen(unsigned char tern_idx, unsigned char root_insert)
 	{
 		for(r = 0; r < (TERM_SIZE * TERM_SIZE); r++)
 		{
-			if(0xFF != g_term_c[tern_idx][r])
+			if(0xFF != g_term_c[layer_idx + 1][tern_idx][r])
 			{
 				for(s = 0; s < (TERM_SIZE * TERM_SIZE); s++)
 				{
 					if((g_term_x[s] == (g_term_x[r] - cmn_factor))
 						&& (g_term_y[s] == g_term_y[r]))
 					{
-						g_term_c[tern_idx][s] = g_term_c[tern_idx][r];
-						g_term_c[tern_idx][r] = 0xFF;
+						g_term_c[layer_idx + 1][tern_idx][s] = g_term_c[layer_idx + 1][tern_idx][r];
+						g_term_c[layer_idx + 1][tern_idx][r] = 0xFF;
 						printf("g_term_update_x: %d | %d %d | %x\n",
 							    tern_idx,
 							    g_term_x[s],
 							    g_term_y[s],
-							    g_term_c[tern_idx][s]);
+							    g_term_c[layer_idx + 1][tern_idx][s]);
 						break;
 					}
 				}
@@ -1513,24 +1547,25 @@ int g_term_new_gen(unsigned char tern_idx, unsigned char root_insert)
 			}
 		}
 	}
-#endif	
+#endif
 
+	printf("*********************\n");
 	for(r = 0; r < (TERM_SIZE * TERM_SIZE); r++)
 	{
-		if(0xFF != g_term_c[tern_idx][r])
+		if(0xFF != g_term_c[layer_idx + 1][tern_idx][r])
 		{
 			printf("g_term_update_OK: %d | %d %d | %x\n",
 				    tern_idx,
 				    g_term_x[r],
 				    g_term_y[r],
-				    g_term_c[tern_idx][r]);
+				    g_term_c[layer_idx + 1][tern_idx][r]);
 		}
 	}
 	
 	return 0;
 }
 
-int g_term_0_y_cal(unsigned char tern_idx)
+int g_term_0_y_cal(unsigned char layer_idx, unsigned char tern_idx)
 {
 	unsigned int i = 0, j = 0;
 
@@ -1577,32 +1612,32 @@ int g_term_0_y_cal(unsigned char tern_idx)
 	/*clear*/
 	for(j = 0; j < (TERM_SIZE * TERM_SIZE); j++)
 	{
-		g_term_0_y_c[tern_idx][j] = 0xFF;
+		g_term_0_y_c[layer_idx][tern_idx][j] = 0xFF;
 	}
 
 	for(j = 0; j < (TERM_SIZE * TERM_SIZE); j++)
 	{
 		if((0 != g_term_x[j])
-			&& (0xFF != g_term_c[tern_idx][j]))
+			&& (0xFF != g_term_c[layer_idx][tern_idx][j]))
 		{
-			g_term_0_y_c[tern_idx][j] = 0xFF;
+			g_term_0_y_c[layer_idx][tern_idx][j] = 0xFF;
 			printf("g_term_set_to_zero: %d | %d %d | %x %x\n",
 				    i,
 				    g_term_x[j],
 				    g_term_y[j],
-				    g_term_c[tern_idx][j],
-				    g_term_0_y_c[tern_idx][j]);
+				    g_term_c[layer_idx][tern_idx][j],
+				    g_term_0_y_c[layer_idx][tern_idx][j]);
 		}
 		else
 		{
-			g_term_0_y_c[tern_idx][j] = g_term_c[tern_idx][j];
-			if(0xFF != g_term_0_y_c[tern_idx][j])
+			g_term_0_y_c[layer_idx][tern_idx][j] = g_term_c[layer_idx][tern_idx][j];
+			if(0xFF != g_term_0_y_c[layer_idx][tern_idx][j])
 			{
 				printf("g_term_0_y: %d | %d %d | %x\n",
 						i,
 						g_term_x[j],
 						g_term_y[j],
-						g_term_0_y_c[tern_idx][j]);
+						g_term_0_y_c[layer_idx][tern_idx][j]);
 			}
 		}
 	}
@@ -1611,7 +1646,7 @@ int g_term_0_y_cal(unsigned char tern_idx)
 	return 0;
 }
 
-unsigned char g_term_x_0_cal(unsigned char tern_idx)
+unsigned char g_term_x_0_cal(unsigned char layer_idx, unsigned char tern_idx)
 {
 	unsigned char val = 0xFF;
 
@@ -1620,42 +1655,42 @@ unsigned char g_term_x_0_cal(unsigned char tern_idx)
 	/*clear*/
 	for(j = 0; j < (TERM_SIZE * TERM_SIZE); j++)
 	{
-		g_term_x_0_c[tern_idx][j] = 0xFF;
+		g_term_x_0_c[layer_idx][tern_idx][j] = 0xFF;
 	}
 
 	for(j = 0; j < (TERM_SIZE * TERM_SIZE); j++)
 	{
 		if((0 != g_term_y[j])
-			&& (0xFF != g_term_c[tern_idx][j]))
+			&& (0xFF != g_term_c[layer_idx][tern_idx][j]))
 		{
-			g_term_x_0_c[tern_idx][j] = 0xFF;
+			g_term_x_0_c[layer_idx][tern_idx][j] = 0xFF;
 			printf("g_term_set_to_zero: %d | %d %d | %x %x\n",
 				    i,
 				    g_term_x[j],
 				    g_term_y[j],
-				    g_term_c[tern_idx][j],
-				    g_term_x_0_c[tern_idx][j]);
+				    g_term_c[layer_idx][tern_idx][j],
+				    g_term_x_0_c[layer_idx][tern_idx][j]);
 		}
 		else
 		{
-			g_term_x_0_c[tern_idx][j] = g_term_c[tern_idx][j];
-			if(0xFF != g_term_x_0_c[tern_idx][j])
+			g_term_x_0_c[layer_idx][tern_idx][j] = g_term_c[layer_idx][tern_idx][j];
+			if(0xFF != g_term_x_0_c[layer_idx][tern_idx][j])
 			{
 				printf("g_term_0_y: %d | %d %d | %x\n",
 						i,
 						g_term_x[j],
 						g_term_y[j],
-						g_term_x_0_c[tern_idx][j]);
+						g_term_x_0_c[layer_idx][tern_idx][j]);
 			}
 		}
 
-		val = gf_add(val, g_term_x_0_c[tern_idx][j]);
+		val = gf_add(val, g_term_x_0_c[layer_idx][tern_idx][j]);
 	}
 	
 	return val;
 }
 
-int chien_searching_for_g_0_y(unsigned char tern_idx, unsigned char root_test)
+int chien_searching_for_g_0_y(unsigned char layer_idx, unsigned char tern_idx, unsigned char root_test)
 {
 	int is_root = 0;
 	unsigned int k = 0;
@@ -1663,13 +1698,13 @@ int chien_searching_for_g_0_y(unsigned char tern_idx, unsigned char root_test)
 	
 	for(k = 0; k < (TERM_SIZE * TERM_SIZE); k++)
 	{
-		if(0xFF != g_term_0_y_c[tern_idx][k])
+		if(0xFF != g_term_0_y_c[layer_idx][tern_idx][k])
 		{
 			tmp = 0xFF;
 			tmp = gf_pow_cal(root_test, g_term_y[k]);
 			//printf("tmp: %x | %x^%d\n", tmp, root_test, g_term_y[k]);
 			//printf("tmp: %x | %x*%x\n", gf_multp(tmp, g_term_0_y_c[tern_idx][k]), tmp, g_term_0_y_c[tern_idx][k]);
-			tmp = gf_multp(tmp, g_term_0_y_c[tern_idx][k]);
+			tmp = gf_multp(tmp, g_term_0_y_c[layer_idx][tern_idx][k]);
 			//printf("tmp_sum: %x | %x+%x\n", gf_add(tmp_sum, tmp), tmp_sum, tmp);
 			tmp_sum = gf_add(tmp_sum, tmp);
 		}
@@ -1690,7 +1725,7 @@ int chien_searching_for_g_0_y(unsigned char tern_idx, unsigned char root_test)
 
 int rr_factorization()
 {
-	unsigned int i = 0, j = 0, k = 0, l = 0, r = 0, s = 0;
+	int i = 0, j = 0, k = 0, l = 0, r = 0, s = 0;
 	int is_root = 0;
 
 	f_root_init();
@@ -1698,17 +1733,17 @@ int rr_factorization()
 	//chien_searching_for_g_0_y(1, power_polynomial_table[0][0]);//test
 	//g_term_new_gen(1, power_polynomial_table[0][0]);//test
 
-	for(s = 0; s <= MESSAGE_LEN; s++)//layer
+	for(s = 0; s < MESSAGE_LEN; s++)//layer
 	{
 		printf("-------------------------------------------\n");
-		g_term_0_y_cal(sml_poly);
-
 		l = 0;
 		for(r = 0; r < f_root_cnt[s]; r++)//roots per layer
 		{
+			g_term_0_y_cal(s, r);
+
 			for(k = 0; k < GF_FIELD; k++)//test roots
 			{
-				is_root = chien_searching_for_g_0_y(sml_poly, power_polynomial_table[k][0]);
+				is_root = chien_searching_for_g_0_y(s, r, power_polynomial_table[k][0]);
 				if(1 == is_root)
 				{
 					f_root_val[s][l] = power_polynomial_table[k][0];
@@ -1717,7 +1752,7 @@ int rr_factorization()
 
 					printf("f_root: %d %d | %x\n", s, l, f_root_val[s][l]);
 
-					g_term_new_gen(sml_poly, f_root_val[s][l]);
+					g_term_new_gen(s, l, f_root_val[s][l]);
 
 					l = l + 1;
 				}
@@ -1725,13 +1760,22 @@ int rr_factorization()
 		}
 	}
 
-	if(0xFF == g_term_x_0_cal(sml_poly))
+	for(r = 0; r < f_root_cnt[MESSAGE_LEN]; r++)
 	{
-		printf("Decoding OK!\n");
-	}
-	else
-	{
-		printf("Decoding Fail!\n");
+		if(0xFF == g_term_x_0_cal(MESSAGE_LEN, r))
+		{
+			printf("Decoding OK!\n");
+
+			printf("Message: %d %d | %x\n", MESSAGE_LEN - 1, r, f_root_val[MESSAGE_LEN - 1][r]);
+			for(s = MESSAGE_LEN - 2; s >= 0; s--)
+			{
+				printf("Message: %d %d | %x\n", s, r, f_root_val[s][f_root_prev[s + 1][r]]);
+			}
+		}
+		else
+		{
+			printf("Decoding Fail!\n");
+		}
 	}
 
 	return 0;
