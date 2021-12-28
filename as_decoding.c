@@ -709,9 +709,15 @@ int lex_order(unsigned int **lex_table, unsigned int d_x, unsigned int d_y)
 
 	for(k = 0; k <= max_degree; k++)
 	{
+#if 1
 		for(j = 0; j < d_y; j++)
 		{
 			for(i = 0; i < d_x; i++)
+#else
+		for(i = 0; i < d_x; i++)
+		{
+			for(j = 0; j < d_y; j++)
+#endif
 			{
 				if(k == tmp_lex_table[i][j])
 				{
@@ -729,7 +735,7 @@ int koetter_interpolation()
 	unsigned int a = 0, b = 0, v = 0;
 	unsigned int tmp_sum = 0, tmp_real = 0;
 	unsigned char tmp_ff = 0xFF;
-	unsigned int l_s = 0xFF, l_w = 0;
+	unsigned int l_s = 0xFFFF, l_w = 0, l_o = 0xFFFF;;
 
 	unsigned int d_x = 0, d_y = 0, c = 0, term_num = 0, term_num_real = 0;
 	unsigned int d_x_max = 0, d_y_max = 0;
@@ -939,8 +945,8 @@ int koetter_interpolation()
 			/*(r, s) pairs is related to the point (a, b), but not the constrain.*/
 			for(k = 0; k < term_num; k++) //for II, as (a, b) pairs
 			{
-				printf("*********************\n");
-				printf("k ready: %d %d | %d | (%d %d)\n", term_num, k, term_use_index[k], g_table_x[term_use_index[k]], g_table_y[term_use_index[k]]);
+				//printf("*********************\n");
+				//printf("k ready: %d %d | %d | (%d %d)\n", term_num, k, term_use_index[k], g_table_x[term_use_index[k]], g_table_y[term_use_index[k]]);
 				memset(discrepancy, 0xFF, sizeof(unsigned char) * (d_y_max + 1));
 
 				//l_s = 0xFF;
@@ -978,8 +984,8 @@ int koetter_interpolation()
 								* (power_polynomial_table[i + 1][0])^(g_table_x[n] - g_table_x[k])
 								* (beta_matrix[i][j])^(g_table_y[n] - g_table_y[k]);
 #endif
-						printf("++++++++++\n");
-						printf("(m, n) ready: %d (%d %d) %x\n", m, g_table_x[n], g_table_y[n], g_table_c_prev[m][n]);
+						//printf("++++++++++\n");
+						//printf("(m, n) ready: %d (%d %d) %x\n", m, g_table_x[n], g_table_y[n], g_table_c_prev[m][n]);
 						tmp_real = real_combine(g_table_x[n], g_table_x[term_use_index[k]]) * real_combine(g_table_y[n], g_table_y[term_use_index[k]]);
 						//printf("tmp_real: %d | %d %d %d | %d %d %d\n", tmp_real, g_table_x[n], g_table_x[term_use_index[k]], real_combine(g_table_x[n], g_table_x[term_use_index[k]]), g_table_y[n], g_table_y[term_use_index[k]], real_combine(g_table_y[n], g_table_y[term_use_index[k]]));
 						tmp_ff = gf_real_mutp_ff(tmp_real, g_table_c_prev[m][n]);
@@ -1003,13 +1009,14 @@ int koetter_interpolation()
 
 					if(0xFF != discrepancy[m])
 					{
-						printf("updating place center: %d | %d | %d\n", l_s, l_w, weight_pol[m]);
-						if((l_w >= weight_pol[m])
+						printf("updating place center: %d | %d vs %d | %d vs %d\n", l_s, l_w, weight_pol[m], l_o, lexorder_pol[m]);
+						if(((l_w >= weight_pol[m]) && (l_o > lexorder_pol[m]))
 							|| (0xFF == discrepancy[l_s]))
 						{
 							l_s = m;
 							l_w = weight_pol[m];
-							printf("updated place center: %d | %d\n", l_s, l_w);
+							l_o = lexorder_pol[m];
+							printf("updated place center: %d | %d | %d\n", l_s, l_w, l_o);
 						}
 					}
 #if 0					
@@ -1023,6 +1030,8 @@ int koetter_interpolation()
 #endif
 					//printf("g_table_c[0][0]: %x\n", g_table_c[0][0]);
 				}
+
+				printf("l_s: %d\n", l_s);
 
 				//printf("g_table_c[0][0]: %x\n", g_table_c[0][0]);
 				//printf("update polynomial ready: %d %d\n", l_s, l_w);
@@ -1176,6 +1185,7 @@ int koetter_interpolation()
 				}
 				//weight_pol[l_s] = weight_pol[l_s] + 1;//update w_l_s
 				l_w = weight_pol[l_s];
+				l_o = lexorder_pol[l_s];
 				//printf("update w_l_s OK\n");
 
 				/*store g as prev_poly*/
@@ -1186,7 +1196,7 @@ int koetter_interpolation()
 						g_table_c_prev[m][n] = g_table_c[m][n];
 						if(0xFF != g_table_c_prev[m][n])
 						{
-							printf("g_table_c_prev: %d %d | %d %d | %x\n", m, n, g_table_x[n], g_table_y[n], g_table_c_prev[m][n]);
+							printf("g_table_c_prev: %d | %d %d | %d %d | %x\n", m, lex_order_table[g_table_x[n]][g_table_y[n]], (g_table_x[n] + (MESSAGE_LEN - 1) * g_table_y[n]), g_table_x[n], g_table_y[n], g_table_c_prev[m][n]);
 						}
 					}
 				}
@@ -1208,12 +1218,13 @@ int koetter_interpolation()
 			tmp_real = weight_pol[m];
 		}
 		if((tmp_real == weight_pol[m])
-			&& (lexorder_pol[sml_poly] < lexorder_pol[m]))
+			&& (lexorder_pol[sml_poly] > lexorder_pol[m]))
 		{
 			printf("sml_updated: %d | %d %d | %d\n", m, tmp_real, weight_pol[m], lexorder_pol[m]);
 			sml_poly = m;
 		}
 	}
+
 	/*copy the interpolated polynomials to global memory*/
 #if 0	
 	for(m = 0; m < (d_y_max + 1); m++)
