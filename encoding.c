@@ -16,9 +16,9 @@ unsigned char generator_polynomial[CODEWORD_LEN - MESSAGE_LEN + 1] =
 unsigned char message_polynomial[MESSAGE_LEN] = 
 {
 	/*power representation*/
-	0xFF,
 	0x1,
-	0x6
+	0x2,
+	0x0
 };
 
 unsigned char encoded_polynomial[CODEWORD_LEN] =
@@ -36,11 +36,10 @@ unsigned char error_polynomial[CODEWORD_LEN] =
 {
 	0xFF,
 	0xFF,
-	0x3,
 	0xFF,
 	0xFF,
-	0x6,
-	0xFF
+	0x0,
+	0x0
 };
 
 unsigned char evaluation_encoding()

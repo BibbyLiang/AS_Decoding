@@ -292,7 +292,7 @@ int real_combine(int n, int k)
 {
 	int i = 0;
 	int combine_num = 0;
-	int tmp_n = 1, tmp_k = 1, tmp_n_k = 1;
+	long tmp_n = 1, tmp_k = 1, tmp_n_k = 1;
 
 	for(i = 1; i < (n + 1); i++)
 	{
@@ -341,7 +341,7 @@ unsigned char gf_pow_cal(unsigned char ff, int n)
 		}
 		else
 		{
-			return 0x1;
+			return 0x0;
 		}
 	}
 

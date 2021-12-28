@@ -6,12 +6,12 @@
 #include "encoding.h"
 #include "as_decoding.h"
 
-#define S_MUL		1
-#define K_M			7
+#define S_MUL		4
+#define K_M			S_MUL * (S_MUL - 1) * MESSAGE_LEN
 #define LAYER_NUM	5
-#define POLY_NUM	10
-#define TERM_SIZE	16//REAL_SIZE = TERM_SIZE^2
-#define ROOT_SIZE	16//REAL_SIZE = TERM_SIZE^2
+#define POLY_NUM	100
+#define TERM_SIZE	100//REAL_SIZE = TERM_SIZE^2
+#define ROOT_SIZE	100//REAL_SIZE = TERM_SIZE^2
 
 unsigned char received_polynomial[CODEWORD_LEN] =
 {
@@ -729,7 +729,7 @@ int koetter_interpolation()
 	unsigned int a = 0, b = 0, v = 0;
 	unsigned int tmp_sum = 0, tmp_real = 0;
 	unsigned char tmp_ff = 0xFF;
-	unsigned char l_s = 0xFF, l_w = 0;
+	unsigned int l_s = 0xFF, l_w = 0;
 
 	unsigned int d_x = 0, d_y = 0, c = 0, term_num = 0, term_num_real = 0;
 	unsigned int d_x_max = 0, d_y_max = 0;
@@ -748,7 +748,7 @@ int koetter_interpolation()
 	d_x = floor(c / (d_y + 1) + d_y * (CODEWORD_LEN - MESSAGE_LEN - 1) / 2);
 
 	d_x = d_x << 1;
-	//d_y = d_y << 1;
+	d_y = d_y << 1;
 
 	unsigned int lex_order_table[d_x][d_y];
 	lex_order((unsigned int **)lex_order_table, d_x, d_y);
@@ -758,7 +758,7 @@ int koetter_interpolation()
 		for(j = 0; j < d_y; j++)
 		{
 			printf("%d ", lex_order_table[i][j]);
-			if(K_M >= lex_order_table[i][j])
+			if(c >= lex_order_table[i][j])
 			{
 				//term_num = term_num + 1;
 #if 0				
@@ -806,6 +806,7 @@ int koetter_interpolation()
 	unsigned char *g_table_y;
 	unsigned char *discrepancy;
 	unsigned char *weight_pol;
+	unsigned char *lexorder_pol;
 	unsigned char *tmp_table_c;
 	unsigned char *term_use_index;//malloc later
 
@@ -820,6 +821,7 @@ int koetter_interpolation()
 	g_table_y = (unsigned char*)malloc(sizeof(unsigned char) * term_num_real);
 	discrepancy = (unsigned char*)malloc(sizeof(unsigned char) * (d_y_max + 1));
 	weight_pol = (unsigned char*)malloc(sizeof(unsigned char) * (d_y_max + 1));
+	lexorder_pol = (unsigned char*)malloc(sizeof(unsigned char) * (d_y_max + 1));
 	tmp_table_c = (unsigned char*)malloc(sizeof(unsigned char) * term_num_real);
 
 	for(i = 0; i < (d_y_max + 1); i++)
@@ -834,6 +836,8 @@ int koetter_interpolation()
 	memset(g_table_y, 0, sizeof(unsigned char) * term_num_real);
 	memset(discrepancy, 0xFF, sizeof(unsigned char) * (d_y_max + 1));
 	memset(tmp_table_c, 0xFF, sizeof(unsigned char) * term_num_real);
+	memset(weight_pol, 0, sizeof(unsigned char) * (d_y_max + 1));
+	memset(lexorder_pol, 0, sizeof(unsigned char) * (d_y_max + 1));
 
 	/*init (a, b) pairs*/
 	k = 0;
@@ -873,10 +877,22 @@ int koetter_interpolation()
 		{
 			if(0xFF != g_table_c[i][j])
 			{
+				//printf("weight_pol_searching: %d %d\n", weight_pol[i], lex_order_table[g_table_x[j]][g_table_y[j]]);
+#if 0				
 				if(weight_pol[i] < lex_order_table[g_table_x[j]][g_table_y[j]])
 				{
 					weight_pol[i] = lex_order_table[g_table_x[j]][g_table_y[j]];
 				}
+#else
+				if(weight_pol[i] < (g_table_x[j] + (MESSAGE_LEN - 1) * g_table_y[j]))
+				{
+					weight_pol[i] = (g_table_x[j] + (MESSAGE_LEN - 1) * g_table_y[j]);
+				}
+				if(lexorder_pol[i] < lex_order_table[g_table_x[j]][g_table_y[j]])
+				{
+					lexorder_pol[i] = lex_order_table[g_table_x[j]][g_table_y[j]];
+				}
+#endif
 			}
 		}
 		//weight_pol[i] = (MESSAGE_LEN - 1) * i;
@@ -918,7 +934,7 @@ int koetter_interpolation()
 					m = m + 1;
 				}
 			}
-			
+
 			/*notice that only (a, b) pairs is constained by (a + b) < m directly.*/
 			/*(r, s) pairs is related to the point (a, b), but not the constrain.*/
 			for(k = 0; k < term_num; k++) //for II, as (a, b) pairs
@@ -962,19 +978,20 @@ int koetter_interpolation()
 								* (power_polynomial_table[i + 1][0])^(g_table_x[n] - g_table_x[k])
 								* (beta_matrix[i][j])^(g_table_y[n] - g_table_y[k]);
 #endif
+						printf("++++++++++\n");
 						printf("(m, n) ready: %d (%d %d) %x\n", m, g_table_x[n], g_table_y[n], g_table_c_prev[m][n]);
 						tmp_real = real_combine(g_table_x[n], g_table_x[term_use_index[k]]) * real_combine(g_table_y[n], g_table_y[term_use_index[k]]);
-						//printf("tmp_real: %d %d %d %d %d %d %d\n", tmp_real, g_table_x[n], g_table_x[k], g_table_y[n], g_table_y[k], real_combine(g_table_x[n], g_table_x[k]), real_combine(g_table_y[n], g_table_y[k]));
+						//printf("tmp_real: %d | %d %d %d | %d %d %d\n", tmp_real, g_table_x[n], g_table_x[term_use_index[k]], real_combine(g_table_x[n], g_table_x[term_use_index[k]]), g_table_y[n], g_table_y[term_use_index[k]], real_combine(g_table_y[n], g_table_y[term_use_index[k]]));
 						tmp_ff = gf_real_mutp_ff(tmp_real, g_table_c_prev[m][n]);
-						//printf("tmp_ff: %x %d %x\n", tmp_ff, tmp_real, g_table_c[m][n]);
+						//printf("tmp_ff: %x = %d mul %x\n", tmp_ff, tmp_real, g_table_c_prev[m][n]);
+						//printf("tmp_ff: %x * (%x = %x^%x)\n", tmp_ff, gf_pow_cal(power_polynomial_table[j + 1][0], (g_table_x[n] - g_table_x[term_use_index[k]])), power_polynomial_table[j + 1][0], (g_table_x[n] - g_table_x[term_use_index[k]]));
 						tmp_ff = gf_multp(tmp_ff, gf_pow_cal(power_polynomial_table[j + 1][0], (g_table_x[n] - g_table_x[term_use_index[k]])));
-						//printf("tmp_ff: %x %x %x %x\n", tmp_ff, gf_pow_cal(power_polynomial_table[i + 1][0], (g_table_x[n] - g_table_x[k])), power_polynomial_table[i + 1][0], (g_table_x[n] - g_table_x[k]));
+						//printf("tmp_ff: %x * (%x = %x^%x)\n", tmp_ff, gf_pow_cal(beta_matrix[i][j], (g_table_y[n] - g_table_y[term_use_index[k]])), beta_matrix[i][j], (g_table_y[n] - g_table_y[term_use_index[k]]));
 						tmp_ff = gf_multp(tmp_ff, gf_pow_cal(beta_matrix[i][j], (g_table_y[n] - g_table_y[term_use_index[k]])));
-						//printf("tmp_ff: %x %x %x %x\n", tmp_ff, gf_pow_cal(beta_matrix[i][j], (g_table_y[n] - g_table_y[k])), beta_matrix[i][j], (g_table_y[n] - g_table_y[k]));
 						tmp_sum = gf_add(tmp_sum, tmp_ff);
 						if(0xFF != tmp_sum)
 						{
-							//printf("tmp_sum: %x %x %x\n", tmp_sum, tmp_ff);
+							//printf("tmp_sum: %x | %x\n", tmp_sum, tmp_ff);
 						}
 					}
 					
@@ -986,13 +1003,13 @@ int koetter_interpolation()
 
 					if(0xFF != discrepancy[m])
 					{
-						printf("updating place center: %d %d %d\n", l_s, l_w, weight_pol[m]);
+						printf("updating place center: %d | %d | %d\n", l_s, l_w, weight_pol[m]);
 						if((l_w >= weight_pol[m])
 							|| (0xFF == discrepancy[l_s]))
 						{
 							l_s = m;
 							l_w = weight_pol[m];
-							printf("updated place center: %d %d\n", l_s, l_w);
+							printf("updated place center: %d | %d\n", l_s, l_w);
 						}
 					}
 #if 0					
@@ -1137,10 +1154,21 @@ int koetter_interpolation()
 					{
 						if(0xFF != g_table_c[m][n])
 						{
+#if 0							
 							if(weight_pol[m] < lex_order_table[g_table_x[n]][g_table_y[n]])
 							{
 								weight_pol[m] = lex_order_table[g_table_x[n]][g_table_y[n]];
 							}
+#else
+							if(weight_pol[m] < (g_table_x[n] + (MESSAGE_LEN - 1) * g_table_y[n]))
+							{
+								weight_pol[m] = (g_table_x[n] + (MESSAGE_LEN - 1) * g_table_y[n]);
+							}
+							if(lexorder_pol[m] < lex_order_table[g_table_x[n]][g_table_y[n]])
+							{
+								lexorder_pol[m] = lex_order_table[g_table_x[n]][g_table_y[n]];
+							}
+#endif
 						}
 					}
 					//weight_pol[i] = (MESSAGE_LEN - 1) * i;
@@ -1175,8 +1203,15 @@ int koetter_interpolation()
 	{
 		if(tmp_real > weight_pol[m])
 		{
+			printf("sml_updated: %d | %d %d | %d\n", m, tmp_real, weight_pol[m], lexorder_pol[m]);
 			sml_poly = m;
 			tmp_real = weight_pol[m];
+		}
+		if((tmp_real == weight_pol[m])
+			&& (lexorder_pol[sml_poly] < lexorder_pol[m]))
+		{
+			printf("sml_updated: %d | %d %d | %d\n", m, tmp_real, weight_pol[m], lexorder_pol[m]);
+			sml_poly = m;
 		}
 	}
 	/*copy the interpolated polynomials to global memory*/
@@ -1204,6 +1239,8 @@ int koetter_interpolation()
 		}
 	}
 #else
+	//sml_poly = 5;//test
+
 	for(n = 0; n < term_num_real; n++)
 	{
 		if(0xFF != g_table_c[sml_poly][n])
@@ -1246,6 +1283,8 @@ int koetter_interpolation()
 	discrepancy = NULL;
 	free(weight_pol);
 	weight_pol = NULL;
+	free(lexorder_pol);
+	lexorder_pol = NULL;
 	free(tmp_table_c);
 	tmp_table_c = NULL;
 
@@ -1305,6 +1344,7 @@ int g_term_new_gen(unsigned char layer_idx, unsigned char tern_idx, unsigned cha
 {
 	unsigned int i = 0, j = 0, k = 0, l = 0, r = 0, s = 0;
 
+	unsigned char tmp = 0xFF;
 	unsigned char g_term_c_expand[TERM_SIZE * TERM_SIZE];
 	unsigned char tmp_g_term_c_expand[TERM_SIZE * TERM_SIZE];
 	unsigned char mul_g_term_c_expand[TERM_SIZE * TERM_SIZE];
@@ -1359,6 +1399,15 @@ int g_term_new_gen(unsigned char layer_idx, unsigned char tern_idx, unsigned cha
 #endif
 		g_term_c_expand_store[k] = 0xFF;
 		tmp_g_term_c_expand[k] = 0xFF;
+	}
+
+	/*init another g*/
+	if((0 == layer_idx)
+		&& (0 != tern_idx))
+	{
+		memcpy(g_term_c[layer_idx][tern_idx],
+			   g_term_c[layer_idx][tern_idx - 1],
+			   sizeof(unsigned char) * k);
 	}
 
 	for(k = 0; k < (TERM_SIZE * TERM_SIZE); k++)//for every term contain "y"
@@ -1439,8 +1488,18 @@ int g_term_new_gen(unsigned char layer_idx, unsigned char tern_idx, unsigned cha
 						if(((g_term_x[r] + g_term_x[k]) == g_term_x[s])
 						&& (g_term_y[r] == g_term_y[s]))
 						{
-							g_term_c_expand_store[s] = gf_add(g_term_c_expand_store[s], g_term_c_expand[r]);
-							g_term_c_expand_store[s] = gf_multp(g_term_c_expand_store[s], g_term_c[layer_idx][tern_idx][k]);
+							printf("g_term_expand_store updating: %d + %d = %d, %d | %x %x %x\n",
+								    g_term_x[r],
+								    g_term_x[k],
+							    	g_term_x[s],
+							    	g_term_y[s],
+							    	g_term_c_expand[r],
+							    	g_term_c[layer_idx][tern_idx][k],
+							    	g_term_c_expand_store[s]);
+							//g_term_c_expand_store[s] = gf_add(g_term_c_expand_store[s], g_term_c_expand[r]);
+							//g_term_c_expand_store[s] = gf_multp(g_term_c_expand_store[s], g_term_c[layer_idx][tern_idx][k]);
+							tmp = gf_multp(g_term_c_expand[r], g_term_c[layer_idx][tern_idx][k]);
+							g_term_c_expand_store[s] = gf_add(g_term_c_expand_store[s], tmp);
 							printf("g_term_expand_store: %d %d | %x\n",
 							    	g_term_x[s],
 							    	g_term_y[s],
@@ -1773,11 +1832,342 @@ int chien_searching_for_g_0_y(unsigned char layer_idx, unsigned char tern_idx, u
 	return is_root;
 }
 
+int test_factorization_init()
+{
+	int k = 0;
+
+	for(k = 0; k < (TERM_SIZE * TERM_SIZE); k++)
+	{
+		g_term_c[0][0][k] = 0xFF;
+
+		if((0 == g_term_x[k])
+			&& (7 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 2;
+		}
+
+		if((3 == g_term_x[k])
+			&& (6 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 5;
+		}
+		if((2 == g_term_x[k])
+			&& (6 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 1;
+		}
+		if((1 == g_term_x[k])
+			&& (6 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 6;
+		}
+		if((0 == g_term_x[k])
+			&& (6 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 6;
+		}
+
+		if((5 == g_term_x[k])
+			&& (5 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 1;
+		}
+		if((4 == g_term_x[k])
+			&& (5 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 6;
+		}
+		if((3 == g_term_x[k])
+			&& (5 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 4;
+		}
+		if((2 == g_term_x[k])
+			&& (5 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 4;
+		}
+		if((0 == g_term_x[k])
+			&& (5 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 2;
+		}
+
+		if((7 == g_term_x[k])
+			&& (4 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 0;
+		}
+		if((6 == g_term_x[k])
+			&& (4 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 3;
+		}
+		if((5 == g_term_x[k])
+			&& (4 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 1;
+		}
+		if((4 == g_term_x[k])
+			&& (4 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 0;
+		}
+		if((3 == g_term_x[k])
+			&& (4 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 2;
+		}
+		if((1 == g_term_x[k])
+			&& (4 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 5;
+		}
+		if((0 == g_term_x[k])
+			&& (4 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 2;
+		}
+
+		if((9 == g_term_x[k])
+			&& (3 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 1;
+		}
+		if((8 == g_term_x[k])
+			&& (3 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 6;
+		}
+		if((7 == g_term_x[k])
+			&& (3 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 6;
+		}
+		if((6 == g_term_x[k])
+			&& (3 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 4;
+		}
+		if((5 == g_term_x[k])
+			&& (3 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 6;
+		}
+		if((4 == g_term_x[k])
+			&& (3 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 2;
+		}
+		if((3 == g_term_x[k])
+			&& (3 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 3;
+		}
+		if((2 == g_term_x[k])
+			&& (3 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 3;
+		}
+		if((1 == g_term_x[k])
+			&& (3 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 3;
+		}
+		if((0 == g_term_x[k])
+			&& (3 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 2;
+		}
+
+		if((11 == g_term_x[k])
+			&& (2 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 2;
+		}
+		if((10 == g_term_x[k])
+			&& (2 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 4;
+		}
+		if((9 == g_term_x[k])
+			&& (2 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 4;
+		}
+		if((8 == g_term_x[k])
+			&& (2 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 1;
+		}
+		if((7 == g_term_x[k])
+			&& (2 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 5;
+		}
+		if((6 == g_term_x[k])
+			&& (2 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 4;
+		}
+		if((5 == g_term_x[k])
+			&& (2 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 0;
+		}
+		if((4 == g_term_x[k])
+			&& (2 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 2;
+		}
+		if((3 == g_term_x[k])
+			&& (2 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 0;
+		}
+		if((2 == g_term_x[k])
+			&& (2 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 4;
+		}
+		if((1 == g_term_x[k])
+			&& (2 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 0;
+		}
+		if((0 == g_term_x[k])
+			&& (2 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 3;
+		}
+
+		if((13 == g_term_x[k])
+			&& (1 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 1;
+		}
+		if((12 == g_term_x[k])
+			&& (1 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 6;
+		}
+		if((11 == g_term_x[k])
+			&& (1 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 6;
+		}
+		if((9 == g_term_x[k])
+			&& (1 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 0;
+		}
+		if((8 == g_term_x[k])
+			&& (1 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 4;
+		}
+		if((7 == g_term_x[k])
+			&& (1 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 5;
+		}
+		if((5 == g_term_x[k])
+			&& (1 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 2;
+		}
+		if((4 == g_term_x[k])
+			&& (1 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 6;
+		}
+		if((3 == g_term_x[k])
+			&& (1 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 5;
+		}
+		if((1 == g_term_x[k])
+			&& (1 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 4;
+		}
+		if((0 == g_term_x[k])
+			&& (1 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 4;
+		}
+
+		if((14 == g_term_x[k])
+			&& (0 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 6;
+		}
+		if((13 == g_term_x[k])
+			&& (0 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 0;
+		}
+		if((12 == g_term_x[k])
+			&& (0 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 3;
+		}
+		if((11 == g_term_x[k])
+			&& (0 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 6;
+		}
+		if((10 == g_term_x[k])
+			&& (0 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 3;
+		}
+		if((9 == g_term_x[k])
+			&& (0 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 1;
+		}
+		if((8 == g_term_x[k])
+			&& (0 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 5;
+		}
+		if((7 == g_term_x[k])
+			&& (0 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 4;
+		}
+		if((6 == g_term_x[k])
+			&& (0 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 1;
+		}
+		if((4 == g_term_x[k])
+			&& (0 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 4;
+		}
+		if((2 == g_term_x[k])
+			&& (0 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 0;
+		}
+		if((1 == g_term_x[k])
+			&& (0 == g_term_y[k]))
+		{
+			g_term_c[0][0][k] = 2;
+		}
+	}
+	
+	return 0;
+}
+
 int rr_factorization()
 {
 	int i = 0, j = 0, k = 0, l = 0, r = 0, s = 0;
 	int is_root = 0;
 
+	//test_factorization_init();
 	f_root_init();
 
 	//chien_searching_for_g_0_y(1, power_polynomial_table[0][0]);//test
