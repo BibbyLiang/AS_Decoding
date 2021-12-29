@@ -290,8 +290,10 @@ int gf_multp_poly_hw(unsigned char* a, unsigned char len_a,
 
 int real_combine(int n, int k)
 {
-	int i = 0;
 	int combine_num = 0;
+
+#if 0//it is useless when values are too large
+	int i = 0;
 	long tmp_n = 1, tmp_k = 1, tmp_n_k = 1;
 
 	for(i = 1; i < (n + 1); i++)
@@ -310,6 +312,16 @@ int real_combine(int n, int k)
 	}
 
 	combine_num = tmp_n / tmp_k / tmp_n_k;
+#else//fast calculation for finite field
+	if(k == (n & k))
+	{
+		combine_num = 1;
+	}
+	else
+	{
+		combine_num = 2;
+	}
+#endif
 
 	return combine_num;
 }

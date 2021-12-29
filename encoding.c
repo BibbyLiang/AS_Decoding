@@ -39,6 +39,7 @@ unsigned char error_polynomial[CODEWORD_LEN] =
 	0xFF,
 	0xFF,
 	0x0,
+	0x0,
 	0x0
 };
 

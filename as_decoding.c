@@ -6,12 +6,16 @@
 #include "encoding.h"
 #include "as_decoding.h"
 
-#define S_MUL		4
-#define K_M			S_MUL * (S_MUL - 1) * MESSAGE_LEN
-#define LAYER_NUM	5
-#define POLY_NUM	100
-#define TERM_SIZE	100//REAL_SIZE = TERM_SIZE^2
-#define ROOT_SIZE	100//REAL_SIZE = TERM_SIZE^2
+#define RELEX_ORDER				1
+
+#define S_MUL					16
+//#define K_M						S_MUL * (S_MUL - 1) * MESSAGE_LEN
+#define LAYER_NUM				(MESSAGE_LEN + 1)
+/*approximate and sufficient size allocation*/
+#define TERM_SIZE				((5 * (S_MUL + 1) * CODEWORD_LEN) >> 2)//REAL_SIZE = TERM_SIZE^2
+#define POLY_NUM				TERM_SIZE
+#define ROOT_SIZE				POLY_NUM
+#define LEX_TABLE_EXPAND_SIZE	1
 
 unsigned char received_polynomial[CODEWORD_LEN] =
 {
@@ -709,7 +713,7 @@ int lex_order(unsigned int **lex_table, unsigned int d_x, unsigned int d_y)
 
 	for(k = 0; k <= max_degree; k++)
 	{
-#if 1
+#if(1 == RELEX_ORDER)
 		for(j = 0; j < d_y; j++)
 		{
 			for(i = 0; i < d_x; i++)
@@ -753,8 +757,8 @@ int koetter_interpolation()
 	//d_y = floor((1 + (unsigned int)pow((1 + 8 * (float)c / (MESSAGE_LEN - 1)), 0.5)) / 2);
 	d_x = floor(c / (d_y + 1) + d_y * (CODEWORD_LEN - MESSAGE_LEN - 1) / 2);
 
-	d_x = d_x << 1;
-	d_y = d_y << 1;
+	d_x = d_x << LEX_TABLE_EXPAND_SIZE;
+	d_y = d_y << LEX_TABLE_EXPAND_SIZE;
 
 	unsigned int lex_order_table[d_x][d_y];
 	lex_order((unsigned int **)lex_order_table, d_x, d_y);
@@ -811,10 +815,10 @@ int koetter_interpolation()
 	unsigned char *g_table_x;
 	unsigned char *g_table_y;
 	unsigned char *discrepancy;
-	unsigned char *weight_pol;
-	unsigned char *lexorder_pol;
+	unsigned int *weight_pol;
+	unsigned int *lexorder_pol;
 	unsigned char *tmp_table_c;
-	unsigned char *term_use_index;//malloc later
+	unsigned int *term_use_index;//malloc later
 
 	g_table_c = (unsigned char**)malloc(sizeof(unsigned char*) * (d_y_max + 1));
 	g_table_c_prev = (unsigned char**)malloc(sizeof(unsigned char*) * (d_y_max + 1));
@@ -826,8 +830,8 @@ int koetter_interpolation()
 	g_table_x = (unsigned char*)malloc(sizeof(unsigned char) * term_num_real);
 	g_table_y = (unsigned char*)malloc(sizeof(unsigned char) * term_num_real);
 	discrepancy = (unsigned char*)malloc(sizeof(unsigned char) * (d_y_max + 1));
-	weight_pol = (unsigned char*)malloc(sizeof(unsigned char) * (d_y_max + 1));
-	lexorder_pol = (unsigned char*)malloc(sizeof(unsigned char) * (d_y_max + 1));
+	weight_pol = (unsigned int*)malloc(sizeof(unsigned int) * (d_y_max + 1));
+	lexorder_pol = (unsigned int*)malloc(sizeof(unsigned int) * (d_y_max + 1));
 	tmp_table_c = (unsigned char*)malloc(sizeof(unsigned char) * term_num_real);
 
 	for(i = 0; i < (d_y_max + 1); i++)
@@ -842,8 +846,8 @@ int koetter_interpolation()
 	memset(g_table_y, 0, sizeof(unsigned char) * term_num_real);
 	memset(discrepancy, 0xFF, sizeof(unsigned char) * (d_y_max + 1));
 	memset(tmp_table_c, 0xFF, sizeof(unsigned char) * term_num_real);
-	memset(weight_pol, 0, sizeof(unsigned char) * (d_y_max + 1));
-	memset(lexorder_pol, 0, sizeof(unsigned char) * (d_y_max + 1));
+	memset(weight_pol, 0, sizeof(unsigned int) * (d_y_max + 1));
+	memset(lexorder_pol, 0xFFFF, sizeof(unsigned int) * (d_y_max + 1));
 
 	/*init (a, b) pairs*/
 	k = 0;
@@ -890,19 +894,18 @@ int koetter_interpolation()
 					weight_pol[i] = lex_order_table[g_table_x[j]][g_table_y[j]];
 				}
 #else
-				if(weight_pol[i] < (g_table_x[j] + (MESSAGE_LEN - 1) * g_table_y[j]))
+				if((weight_pol[i] < (g_table_x[j] + (MESSAGE_LEN - 1) * g_table_y[j]))
+					|| ((weight_pol[i] == (g_table_x[j] + (MESSAGE_LEN - 1) * g_table_y[j]))
+						&& (lexorder_pol[i] > lex_order_table[g_table_x[j]][g_table_y[j]])))
 				{
 					weight_pol[i] = (g_table_x[j] + (MESSAGE_LEN - 1) * g_table_y[j]);
-				}
-				if(lexorder_pol[i] < lex_order_table[g_table_x[j]][g_table_y[j]])
-				{
 					lexorder_pol[i] = lex_order_table[g_table_x[j]][g_table_y[j]];
 				}
 #endif
 			}
 		}
 		//weight_pol[i] = (MESSAGE_LEN - 1) * i;
-		printf("weight_pol: %d\n", weight_pol[i]);
+		printf("pol: %d %d\n", weight_pol[i], lexorder_pol[i]);
 	}
 	//printf("g_table_c[0][0]: %x\n", g_table_c[0][0]);
 
@@ -929,7 +932,7 @@ int koetter_interpolation()
 					}
 				}
 			}
-			term_use_index = (unsigned char*)malloc(sizeof(unsigned char) * term_num);
+			term_use_index = (unsigned int*)malloc(sizeof(unsigned int) * term_num);
 			m = 0;
 			for(k = 0; k < term_num_real; k++)
 			{
@@ -1010,7 +1013,13 @@ int koetter_interpolation()
 					if(0xFF != discrepancy[m])
 					{
 						printf("updating place center: %d | %d vs %d | %d vs %d\n", l_s, l_w, weight_pol[m], l_o, lexorder_pol[m]);
-						if(((l_w >= weight_pol[m]) && (l_o > lexorder_pol[m]))
+#if 1
+						if(((l_w > weight_pol[m])
+								|| ((l_w == weight_pol[m])
+									&& (l_o > lexorder_pol[m])))
+#else//there may be some err
+						if((l_w >= weight_pol[m])
+#endif
 							|| (0xFF == discrepancy[l_s]))
 						{
 							l_s = m;
@@ -1159,6 +1168,9 @@ int koetter_interpolation()
 
 				for(m = 0; m < (d_y_max + 1); m++)
 				{
+					weight_pol[m] = 0;
+					lexorder_pol[m] = 0xFFFF;
+					
 					for(n = 0; n < term_num_real; n++)
 					{
 						if(0xFF != g_table_c[m][n])
@@ -1169,19 +1181,19 @@ int koetter_interpolation()
 								weight_pol[m] = lex_order_table[g_table_x[n]][g_table_y[n]];
 							}
 #else
-							if(weight_pol[m] < (g_table_x[n] + (MESSAGE_LEN - 1) * g_table_y[n]))
+							if((weight_pol[m] < (g_table_x[n] + (MESSAGE_LEN - 1) * g_table_y[n]))
+								|| ((weight_pol[m] == (g_table_x[n] + (MESSAGE_LEN - 1) * g_table_y[n])) 
+									&& (lexorder_pol[m] > lex_order_table[g_table_x[n]][g_table_y[n]])))
 							{
 								weight_pol[m] = (g_table_x[n] + (MESSAGE_LEN - 1) * g_table_y[n]);
-							}
-							if(lexorder_pol[m] < lex_order_table[g_table_x[n]][g_table_y[n]])
-							{
 								lexorder_pol[m] = lex_order_table[g_table_x[n]][g_table_y[n]];
+								printf("pol_updating: %d %d\n", weight_pol[m], lexorder_pol[m]);
 							}
 #endif
 						}
 					}
 					//weight_pol[i] = (MESSAGE_LEN - 1) * i;
-					printf("weight_pol: %d\n", weight_pol[m]);
+					printf("pol: %d %d\n", weight_pol[m], lexorder_pol[m]);
 				}
 				//weight_pol[l_s] = weight_pol[l_s] + 1;//update w_l_s
 				l_w = weight_pol[l_s];
