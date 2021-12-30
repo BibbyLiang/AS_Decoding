@@ -3,7 +3,7 @@
 
 #define RELEX_ORDER				1
 
-#define S_MUL					16
+#define S_MUL					4
 //#define K_M						S_MUL * (S_MUL - 1) * MESSAGE_LEN
 #define LAYER_NUM				(MESSAGE_LEN + 1)
 /*approximate and sufficient size allocation*/

@@ -1,7 +1,7 @@
 #ifndef ENCODING_H
 #define ENCODING_H
 
-#define SYS_ENC		0
+#define SYS_ENC		1
 
 extern unsigned char generator_polynomial[CODEWORD_LEN - MESSAGE_LEN + 1];
 extern unsigned char message_polynomial[MESSAGE_LEN];

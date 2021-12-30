@@ -2232,8 +2232,9 @@ unsigned int hamm_distance_cal(unsigned char *a,
 	{
 		for(j = 0; j < GF_Q; j++)
 		{
-			tmp_a = (power_polynomial_table[a[i]][1] >> j) & 0x1;
-			tmp_b = (power_polynomial_table[b[i]][1] >> j) & 0x1;
+			/*notice these indexes, 0xFF + 0x1 = 0, ..., 0x6 + 0x1 = 7*/
+			tmp_a = (power_polynomial_table[a[i] + 0x1][1] >> j) & 0x1;
+			tmp_b = (power_polynomial_table[b[i] + 0x1][1] >> j) & 0x1;
 
 			if(tmp_a != tmp_b)
 			{
@@ -2241,7 +2242,7 @@ unsigned int hamm_distance_cal(unsigned char *a,
 			}
 		}
 	}
-	//DEBUG_NOTICE("Hamming Distance: %d\n", hamm_distance);
+	//DEBUG_IMPOTANT("Hamming Distance Test: %d\n", hamm_distance);
 
 	return hamm_distance;
 }
@@ -2273,17 +2274,19 @@ int check_rr_decoded_result()
 
 				tmp_decoded_message[s] = f_root_val[s][f_root_prev[s + 1][r]];
 			}
-#if (1 == SYS_ENC)
-			systematic_encoding_v2(tmp_decoded_message, tmp_decoded_codeword);
-#else
+
 			evaluation_encoding_v2(tmp_decoded_message, tmp_decoded_codeword);
-#endif
+
 			tmp = hamm_distance_cal(tmp_decoded_codeword, received_polynomial, CODEWORD_LEN);
 			if(tmp < hamm_distance)
 			{
 				hamm_distance = tmp;
 				memcpy(decoded_codeword, tmp_decoded_codeword, sizeof(unsigned char) * CODEWORD_LEN);
+#if (1 == SYS_ENC)				
+				memcpy(decoded_message, (tmp_decoded_codeword + (CODEWORD_LEN - MESSAGE_LEN)), sizeof(unsigned char) * MESSAGE_LEN);
+#else
 				memcpy(decoded_message, tmp_decoded_message, sizeof(unsigned char) * MESSAGE_LEN);
+#endif
 			}
 		}
 		else
