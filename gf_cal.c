@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#include "debug_info.h"
 #include "gf_cal.h"
 
 unsigned char power_polynomial_table[GF_FIELD][2] = 
@@ -78,11 +79,11 @@ unsigned char gf_div(unsigned char a, unsigned char b)
 	}
 	if(0xFF == b)
 	{
-		printf("div err.\n");
+		DEBUG_NOTICE("div err.\n");
 		return 0xFF;
 	}
 
-	//printf("div: %x %x\n", a, b);
+	//DEBUG_NOTICE("div: %x %x\n", a, b);
 	unsigned char quotient_in_pow = 0;
 	if(a >= b)
 	{
@@ -145,7 +146,7 @@ unsigned char gf_div_q_r(unsigned char* dividend, unsigned char len_dividend,
 		{
 			remainder[i] = dividend[i];
 		}
-		//printf("quotien is zero: %d %d\n", gf_degree(divisor, len_divisor), gf_degree(dividend, len_dividend));
+		//DEBUG_NOTICE("quotien is zero: %d %d\n", gf_degree(divisor, len_divisor), gf_degree(dividend, len_dividend));
 
 		return 0;
 	}
@@ -157,7 +158,7 @@ unsigned char gf_div_q_r(unsigned char* dividend, unsigned char len_dividend,
 		factor = gf_div(dividend_tmp[gf_degree(dividend_tmp, len_dividend)], divisor[gf_degree(divisor, len_divisor)]);
 
 		quotien[locator] = factor;
-		//printf("quotien: %x %d %x\n", quotien[locator], locator, factor);
+		//DEBUG_NOTICE("quotien: %x %d %x\n", quotien[locator], locator, factor);
 
 		for(j = 0; j < len_divisor; j++)
 		{
@@ -166,12 +167,12 @@ unsigned char gf_div_q_r(unsigned char* dividend, unsigned char len_dividend,
 			remainder_tmp[locator_rmd] = gf_add(dividend_tmp[locator_rmd], factor_rmd);
 		}
 #if 0
-		printf("remainder_tmp:\n");
+		DEBUG_NOTICE("remainder_tmp:\n");
 		for(k = 0; k < len_remainder; k++)
 		{
-			printf("%x ", remainder_tmp[k]);
+			DEBUG_NOTICE("%x ", remainder_tmp[k]);
 		}
-		printf("\n");
+		DEBUG_NOTICE("\n");
 #endif
 		if(gf_degree(divisor, len_divisor) > gf_degree(remainder_tmp, len_remainder))
 		{
@@ -204,7 +205,7 @@ unsigned char gf_multp_poly(unsigned char* a, unsigned char len_a,
 			idx = i + j;
 			if(len_product <= idx)
 			{
-				//printf("product len err: %d\n", idx);
+				//DEBUG_NOTICE("product len err: %d\n", idx);
 				continue;
 			}
 			product[idx] = gf_add(product[idx], gf_multp(a[i], b[j]));
@@ -226,9 +227,9 @@ int gf_multp_poly_hw(unsigned char* a, unsigned char len_a,
 	{
 		pd_tmp = gf_multp(*(a + len_a - 1), *(b + (len_b - 1 - i)));
 		product[idx] = gf_add(reg[len_a - 2], pd_tmp);
-		//printf("unrel_group_seq: %x\n", a[0]);
+		//DEBUG_NOTICE("unrel_group_seq: %x\n", a[0]);
 #if 0
-		printf("%x %x %x %x %x %x\n", 
+		DEBUG_NOTICE("%x %x %x %x %x %x\n", 
 									idx,
 									product[idx],
 					  	   	 		reg[len_a - 2],
@@ -238,7 +239,7 @@ int gf_multp_poly_hw(unsigned char* a, unsigned char len_a,
 #endif
 		if(0 >= idx)
 		{
-			//printf("product len err: %d\n", idx);
+			//DEBUG_NOTICE("product len err: %d\n", idx);
 			break;
 		}
 		idx = idx - 1;
@@ -248,13 +249,13 @@ int gf_multp_poly_hw(unsigned char* a, unsigned char len_a,
 			pd_tmp = gf_multp(*(a + len_a - 1 - j), *(b + (len_b - 1 - i)));
 			reg[len_a - 1 - j] = gf_add(reg[len_a - 1 - j - 1], pd_tmp);
 #if 0
-			printf("idx: %d\n", len_a - 1 - j);
-			printf("%x %x %x %x %x\n", reg[len_a - 1 - j], reg[len_a - 1 - j - 1], pd_tmp,
+			DEBUG_NOTICE("idx: %d\n", len_a - 1 - j);
+			DEBUG_NOTICE("%x %x %x %x %x\n", reg[len_a - 1 - j], reg[len_a - 1 - j - 1], pd_tmp,
 								 	   *(a + len_a - 1 - j), *(b + (len_b - 1 - i)));
 #endif
 		}
 		reg[0] = gf_multp(*(a + 0), *(b + (len_b - 1 - i)));
-		//printf("%x %x %x\n", reg[0], *(a + 0), *(b + (len_b - 1 - i)));
+		//DEBUG_NOTICE("%x %x %x\n", reg[0], *(a + 0), *(b + (len_b - 1 - i)));
 	}
 
 	for(i = 0; i < len_a; i++)
@@ -262,7 +263,7 @@ int gf_multp_poly_hw(unsigned char* a, unsigned char len_a,
 		pd_tmp = gf_multp(*(a + len_a - 1), 0xFF);
 		product[idx] = gf_add(reg[len_a - 2], pd_tmp);
 #if 0
-		printf("%x %x %x %x %x %x\n", 
+		DEBUG_NOTICE("%x %x %x %x %x %x\n", 
 									idx,
 									product[idx],
 					  	   	 		reg[len_a - 2],
@@ -272,7 +273,7 @@ int gf_multp_poly_hw(unsigned char* a, unsigned char len_a,
 #endif
 		if(0 >= idx)
 		{
-			//printf("product len err: %d\n", idx);
+			//DEBUG_NOTICE("product len err: %d\n", idx);
 			break;
 		}
 		idx = idx - 1;

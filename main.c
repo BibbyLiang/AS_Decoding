@@ -1,3 +1,4 @@
+#include "debug_info.h"
 #include "gf_cal.h"
 #include "as_decoding.h"
 #include "encoding.h"

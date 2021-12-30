@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#include "debug_info.h"
 #include "gf_cal.h"
 #include "encoding.h"
 
@@ -35,11 +36,11 @@ unsigned char encoded_polynomial[CODEWORD_LEN] =
 unsigned char error_polynomial[CODEWORD_LEN] =
 {
 	0xFF,
-	0xFF,
+	0x0,
 	0xFF,
 	0x3,
 	0xFF,
-	0x5,
+	0xFF,
 	0x0
 };
 
@@ -77,12 +78,12 @@ unsigned char evaluation_encoding()
 	}
 #endif
 
-	printf("Evaluation Encoding Codeword:\n");
+	DEBUG_IMPOTANT("Evaluation Encoding Codeword:\n");
 	for(i = 0; i < CODEWORD_LEN; i++)
 	{
-		printf("%x ", encoded_polynomial[i]);
+		DEBUG_IMPOTANT("%x ", encoded_polynomial[i]);
 	}
-	printf("\n");
+	DEBUG_IMPOTANT("\n");
 
 	return 0;
 }
@@ -134,12 +135,12 @@ unsigned char systematic_encoding()
 	}
 	memcpy(encoded_polynomial, codeword, sizeof(unsigned char) * CODEWORD_LEN);
 
-	printf("Systematic Encoding Codeword:\n");
+	DEBUG_IMPOTANT("Systematic Encoding Codeword:\n");
 	for(i = 0; i < CODEWORD_LEN; i++)
 	{
-		printf("%x ", encoded_polynomial[i]);
+		DEBUG_IMPOTANT("%x ", encoded_polynomial[i]);
 	}
-	printf("\n");
+	DEBUG_IMPOTANT("\n");
 
 	return 0;
 }
@@ -179,12 +180,12 @@ unsigned char evaluation_encoding_v2(unsigned char *message,
 	}
 #endif
 #if 0
-	printf("Evaluation Encoding Codeword:\n");
+	DEBUG_INFO("Evaluation Encoding Codeword:\n");
 	for(i = 0; i < CODEWORD_LEN; i++)
 	{
-		printf("%x ", codeword_output[i]);
+		DEBUG_INFO("%x ", codeword_output[i]);
 	}
-	printf("\n");
+	DEBUG_INFO("\n");
 #endif
 	return 0;
 }
@@ -238,12 +239,12 @@ unsigned char systematic_encoding_v2(unsigned char *message,
 	memcpy(codeword_output, codeword, sizeof(unsigned char) * CODEWORD_LEN);
 
 #if 0
-	printf("Systematic Encoding Codeword:\n");
+	DEBUG_INFO("Systematic Encoding Codeword:\n");
 	for(i = 0; i < CODEWORD_LEN; i++)
 	{
-		printf("%x ", codeword_output[i]);
+		DEBUG_INFO("%x ", codeword_output[i]);
 	}
-	printf("\n");
+	DEBUG_INFO("\n");
 #endif	
 
 	return 0;
