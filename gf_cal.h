@@ -1,6 +1,7 @@
 #ifndef GF_CAL_H
 #define GF_CAL_H
 
+#define GF_Q			 3
 #define GF_FIELD        8
 #define MESSAGE_LEN     3
 #define CODEWORD_LEN    GF_FIELD - 1    

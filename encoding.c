@@ -37,9 +37,9 @@ unsigned char error_polynomial[CODEWORD_LEN] =
 	0xFF,
 	0xFF,
 	0xFF,
+	0x3,
 	0xFF,
-	0x0,
-	0x0,
+	0x5,
 	0x0
 };
 
@@ -143,3 +143,109 @@ unsigned char systematic_encoding()
 
 	return 0;
 }
+
+unsigned char evaluation_encoding_v2(unsigned char *message,
+											unsigned char *codeword_output)
+{
+	unsigned char i = 0, j = 0;
+	unsigned char tmp_power_result[MESSAGE_LEN], tmp_add_result = 0;
+
+	unsigned char codeword[CODEWORD_LEN];
+
+	for(i = 0; i < CODEWORD_LEN; i++)
+	{
+		for(j = 0; j < MESSAGE_LEN; j++)
+		{
+			tmp_power_result[j] = gf_multp(message[j], i * gf_location(j));
+		}
+		tmp_add_result = 0;
+		for(j = 0; j < MESSAGE_LEN; j++)
+		{
+			tmp_add_result = gf_pow2poly(tmp_power_result[j]) ^ tmp_add_result;
+		}
+
+		for(j = 0; j < GF_FIELD; j++)
+		{
+			codeword[i] = gf_poly2pow(tmp_add_result);
+		}
+	}
+
+#if 1
+	memcpy(codeword_output, codeword, sizeof(unsigned char) * CODEWORD_LEN);
+#else
+	for(i = 0; i < CODEWORD_LEN; i++)
+	{
+		encoded_polynomial[i] = codeword[CODEWORD_LEN - 1 - i];
+	}
+#endif
+#if 0
+	printf("Evaluation Encoding Codeword:\n");
+	for(i = 0; i < CODEWORD_LEN; i++)
+	{
+		printf("%x ", codeword_output[i]);
+	}
+	printf("\n");
+#endif
+	return 0;
+}
+
+unsigned char systematic_encoding_v2(unsigned char *message,
+											unsigned char *codeword_output)
+{
+	unsigned char i = 0;
+	
+	unsigned char clock_cycle = 0;
+	unsigned char input_message = 0;
+	unsigned char feed_back_reg = 0, reg_delay[CODEWORD_LEN - MESSAGE_LEN];
+	unsigned char codeword[CODEWORD_LEN];
+
+	/*for iterating calculation, tmp for C, not in HDL*/
+	unsigned char feed_back_reg_prev = feed_back_reg, reg_delay_prev[CODEWORD_LEN - MESSAGE_LEN];
+
+	memset(reg_delay, 0xFF, sizeof(unsigned char) * (CODEWORD_LEN - MESSAGE_LEN));
+	memset(codeword, 0xFF, sizeof(unsigned char) * CODEWORD_LEN);
+	memcpy(reg_delay_prev, reg_delay, sizeof(unsigned char) * (CODEWORD_LEN - MESSAGE_LEN));
+
+	if(0 == clock_cycle)
+	{
+		input_message = message[MESSAGE_LEN - 1 - clock_cycle];
+		feed_back_reg = gf_add(input_message, reg_delay[CODEWORD_LEN - MESSAGE_LEN - 1]);
+		feed_back_reg_prev = feed_back_reg;
+		memcpy(reg_delay_prev, reg_delay, sizeof(unsigned char) * (CODEWORD_LEN - MESSAGE_LEN));
+	}
+	for(clock_cycle = 1; clock_cycle < (CODEWORD_LEN - MESSAGE_LEN); clock_cycle++)
+	{
+		for(i = CODEWORD_LEN - MESSAGE_LEN - 1; i >0; i--)
+		{
+			reg_delay[i] = gf_add(gf_multp(feed_back_reg_prev, generator_polynomial[i]), reg_delay_prev[i - 1]);
+		}
+		reg_delay[0] = gf_multp(feed_back_reg_prev, generator_polynomial[0]);
+		input_message = message[MESSAGE_LEN - 1 - clock_cycle];		
+		feed_back_reg = gf_add(input_message, reg_delay[CODEWORD_LEN - MESSAGE_LEN - 1]);
+
+		feed_back_reg_prev = feed_back_reg;
+		memcpy(reg_delay_prev, reg_delay, sizeof(unsigned char) * (CODEWORD_LEN - MESSAGE_LEN));
+	}
+
+	for(i = CODEWORD_LEN - MESSAGE_LEN; i < CODEWORD_LEN; i++)
+	{
+		codeword[i] = message[i - (CODEWORD_LEN - MESSAGE_LEN)];
+	}
+	for(i = 0; i < CODEWORD_LEN - MESSAGE_LEN; i++)
+	{
+		codeword[i] = reg_delay[i];
+	}
+	memcpy(codeword_output, codeword, sizeof(unsigned char) * CODEWORD_LEN);
+
+#if 0
+	printf("Systematic Encoding Codeword:\n");
+	for(i = 0; i < CODEWORD_LEN; i++)
+	{
+		printf("%x ", codeword_output[i]);
+	}
+	printf("\n");
+#endif	
+
+	return 0;
+}
+

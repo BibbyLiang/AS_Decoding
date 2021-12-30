@@ -6,7 +6,7 @@ void main()
 {
 	unsigned char i = 0;
 
-#if 0
+#if (1 == SYS_ENC)
 	systematic_encoding();
 #else
 	evaluation_encoding();

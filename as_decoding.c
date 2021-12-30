@@ -8,7 +8,7 @@
 
 #define RELEX_ORDER				1
 
-#define S_MUL					16
+#define S_MUL					8
 //#define K_M						S_MUL * (S_MUL - 1) * MESSAGE_LEN
 #define LAYER_NUM				(MESSAGE_LEN + 1)
 /*approximate and sufficient size allocation*/
@@ -61,6 +61,8 @@ unsigned char f_root_val[ROOT_SIZE][ROOT_SIZE];
 unsigned char f_root_prev[ROOT_SIZE][ROOT_SIZE];
 unsigned char f_root_cnt[ROOT_SIZE + 1];//used for next layer
 unsigned char sml_poly = 0xFF;
+unsigned char decoded_codeword[CODEWORD_LEN];
+unsigned char decoded_message[MESSAGE_LEN];
 
 void find_max_val(float matrix[][CODEWORD_LEN], unsigned char col,
 					 unsigned char* m_ptr, unsigned char* n_ptr)
@@ -1796,16 +1798,19 @@ unsigned char g_term_x_0_cal(unsigned char layer_idx, unsigned char tern_idx)
 			&& (0xFF != g_term_c[layer_idx][tern_idx][j]))
 		{
 			g_term_x_0_c[layer_idx][tern_idx][j] = 0xFF;
+#if 0			
 			printf("g_term_set_to_zero: %d | %d %d | %x %x\n",
 				    i,
 				    g_term_x[j],
 				    g_term_y[j],
 				    g_term_c[layer_idx][tern_idx][j],
 				    g_term_x_0_c[layer_idx][tern_idx][j]);
+#endif
 		}
 		else
 		{
 			g_term_x_0_c[layer_idx][tern_idx][j] = g_term_c[layer_idx][tern_idx][j];
+#if 0
 			if(0xFF != g_term_x_0_c[layer_idx][tern_idx][j])
 			{
 				printf("g_term_0_y: %d | %d %d | %x\n",
@@ -1814,6 +1819,7 @@ unsigned char g_term_x_0_cal(unsigned char layer_idx, unsigned char tern_idx)
 						g_term_y[j],
 						g_term_x_0_c[layer_idx][tern_idx][j]);
 			}
+#endif			
 		}
 
 		val = gf_add(val, g_term_x_0_c[layer_idx][tern_idx][j]);
@@ -2223,6 +2229,46 @@ int rr_factorization()
 		}
 	}
 
+	return 0;
+}
+
+unsigned int hamm_distance_cal(unsigned char *a,
+									  unsigned char *b,
+									  unsigned int len)
+{
+	unsigned int hamm_distance = 0;
+
+	int i = 0, j = 0;
+	unsigned char tmp_a = 0, tmp_b = 0;
+
+	for(i = 0; i < len; i++)
+	{
+		for(j = 0; j < GF_Q; j++)
+		{
+			tmp_a = (power_polynomial_table[a[i]][1] >> j) & 0x1;
+			tmp_b = (power_polynomial_table[b[i]][1] >> j) & 0x1;
+
+			if(tmp_a != tmp_b)
+			{
+				hamm_distance = hamm_distance + 1;
+			}
+		}
+	}
+	//printf("Hamming Distance: %d\n", hamm_distance);
+
+	return hamm_distance;
+}
+
+int check_rr_decoded_result()
+{
+	int r = 0, s = 0;
+	unsigned int hamm_distance = 0xFFFF, tmp = 0;
+	unsigned char tmp_decoded_message[MESSAGE_LEN];
+	unsigned char tmp_decoded_codeword[CODEWORD_LEN];
+	
+	memset(tmp_decoded_message, 0xFF, sizeof(unsigned char) * MESSAGE_LEN);
+	memset(tmp_decoded_codeword, 0xFF, sizeof(unsigned char) * CODEWORD_LEN);
+
 	for(r = 0; r < f_root_cnt[MESSAGE_LEN]; r++)
 	{
 		if(0xFF == g_term_x_0_cal(MESSAGE_LEN, r))
@@ -2230,15 +2276,63 @@ int rr_factorization()
 			printf("Decoding OK!\n");
 
 			printf("Message: %d %d | %x\n", MESSAGE_LEN - 1, r, f_root_val[MESSAGE_LEN - 1][r]);
+
+			memset(tmp_decoded_message, 0xFF, sizeof(unsigned char) * MESSAGE_LEN);
+			tmp_decoded_message[MESSAGE_LEN - 1] = f_root_val[MESSAGE_LEN - 1][r];
+
 			for(s = MESSAGE_LEN - 2; s >= 0; s--)
 			{
 				printf("Message: %d %d | %x\n", s, r, f_root_val[s][f_root_prev[s + 1][r]]);
+
+				tmp_decoded_message[s] = f_root_val[s][f_root_prev[s + 1][r]];
+			}
+#if (1 == SYS_ENC)
+			systematic_encoding_v2(tmp_decoded_message, tmp_decoded_codeword);
+#else
+			evaluation_encoding_v2(tmp_decoded_message, tmp_decoded_codeword);
+#endif
+			tmp = hamm_distance_cal(tmp_decoded_codeword, received_polynomial, CODEWORD_LEN);
+			if(tmp < hamm_distance)
+			{
+				hamm_distance = tmp;
+				memcpy(decoded_codeword, tmp_decoded_codeword, sizeof(unsigned char) * CODEWORD_LEN);
+				memcpy(decoded_message, tmp_decoded_message, sizeof(unsigned char) * MESSAGE_LEN);
 			}
 		}
 		else
 		{
-			printf("Decoding Fail!\n");
+			printf("Decoding Fail for Root-%d\n", r);
 		}
+	}
+
+	if(0xFFFF != hamm_distance)
+	{
+		printf("Received Codeword:\n");
+		for(r = 0; r < CODEWORD_LEN; r++)
+		{
+			printf("%x ", received_polynomial[r]);
+		}
+		printf("\n");
+
+		printf("Decoding Result:\n");
+		for(r = 0; r < CODEWORD_LEN; r++)
+		{
+			printf("%x ", decoded_codeword[r]);
+		}
+		printf("\n");
+
+		printf("Hamming Distance: %d\n", hamm_distance);
+
+		printf("Decoded Message:\n");
+		for(r = 0; r < MESSAGE_LEN; r++)
+		{
+			printf("%x ", decoded_message[r]);
+		}
+		printf("\n");
+	}
+	else
+	{
+		printf("Decoding Fail!\n");
 	}
 
 	return 0;
@@ -2260,6 +2354,8 @@ int as_decoding()
 	koetter_interpolation();
 
 	rr_factorization();
+
+	check_rr_decoded_result();
 
 	return 0;
 }
