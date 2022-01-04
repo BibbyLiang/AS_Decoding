@@ -4,7 +4,7 @@
 #define GF_Q			 3
 #define GF_FIELD        8
 #define MESSAGE_LEN     3
-#define CODEWORD_LEN    GF_FIELD - 1    
+#define CODEWORD_LEN    (GF_FIELD - 1)   
 
 extern unsigned char power_polynomial_table[GF_FIELD][2];
 

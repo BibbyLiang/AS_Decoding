@@ -14,6 +14,8 @@
 
 extern unsigned char received_polynomial[CODEWORD_LEN];
 extern unsigned char output_polynomial[CODEWORD_LEN];
+extern unsigned char decoded_codeword[CODEWORD_LEN];
+extern unsigned char decoded_message[MESSAGE_LEN];
 
 extern int chanl_rel_init();
 extern int mul_assign();

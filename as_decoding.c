@@ -1848,6 +1848,7 @@ int chien_searching_for_g_0_y(unsigned char layer_idx, unsigned char tern_idx, u
 	return is_root;
 }
 
+#if 0
 int test_factorization_init()
 {
 	int k = 0;
@@ -2177,6 +2178,7 @@ int test_factorization_init()
 	
 	return 0;
 }
+#endif
 
 int rr_factorization()
 {
