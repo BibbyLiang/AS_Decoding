@@ -43,21 +43,21 @@ unsigned char sigma[((CODEWORD_LEN - MESSAGE_LEN) + (CODEWORD_LEN - MESSAGE_LEN 
 unsigned char erasure_polynomial[CODEWORD_LEN];
 unsigned char phi[CODEWORD_LEN];
 unsigned char g_term_c[LAYER_NUM][POLY_NUM][TERM_SIZE * TERM_SIZE];
-unsigned char g_term_x[TERM_SIZE * TERM_SIZE];
-unsigned char g_term_y[TERM_SIZE * TERM_SIZE];
+unsigned long long g_term_x[TERM_SIZE * TERM_SIZE];
+unsigned long long g_term_y[TERM_SIZE * TERM_SIZE];
 unsigned char g_term_0_y_c[LAYER_NUM][POLY_NUM][TERM_SIZE * TERM_SIZE];
 unsigned char g_term_x_0_c[LAYER_NUM][POLY_NUM][TERM_SIZE * TERM_SIZE];
 unsigned char f_root_val[ROOT_SIZE][ROOT_SIZE];
 unsigned char f_root_prev[ROOT_SIZE][ROOT_SIZE];
-unsigned char f_root_cnt[ROOT_SIZE + 1];//used for next layer
-unsigned char sml_poly = 0xFF;
+unsigned long long f_root_cnt[ROOT_SIZE + 1];//used for next layer
+unsigned long long sml_poly = 0xFF;
 unsigned char decoded_codeword[CODEWORD_LEN];
 unsigned char decoded_message[MESSAGE_LEN];
 
-void find_max_val(float matrix[][CODEWORD_LEN], unsigned char col,
+void find_max_val(float matrix[][CODEWORD_LEN], unsigned long long col,
 					 unsigned char* m_ptr, unsigned char* n_ptr)
 {
-	unsigned char i = 0, j = 0;
+	unsigned long long i = 0, j = 0;
 	float max_val = 0;
 
 	for(i = 0; i < col; i++)
@@ -80,7 +80,7 @@ void find_max_val(float matrix[][CODEWORD_LEN], unsigned char col,
 
 int chnl_rel_init()
 {
-	unsigned char i = 0, j = 0;
+	unsigned long long i = 0, j = 0;
 
 	for(i = 0; i < CODEWORD_LEN + 1; i++)
 	{
@@ -135,9 +135,9 @@ int chnl_rel_init()
 
 int mul_assign()
 {
-	unsigned char i = 0, j = 0;
+	unsigned long long i = 0, j = 0;
 #if 0	
-	unsigned char s = 0;
+	unsigned long long s = 0;
 	unsigned char *m_ptr = (unsigned char*)malloc(sizeof(unsigned char));
 	unsigned char *n_ptr = (unsigned char*)malloc(sizeof(unsigned char));
 
@@ -178,6 +178,8 @@ int mul_assign()
 	{
 		for(j = 0; j < CODEWORD_LEN + 1; j++)
 		{
+			mul_matrix[j][i] = 0;
+
 			if(power_polynomial_table[j][0] == received_polynomial[i])
 			{
 				mul_matrix[j][i] = S_MUL;
@@ -185,6 +187,7 @@ int mul_assign()
 		}
 	}
 
+#if (1 == CFG_DEBUG_IMPOTANT)
 	DEBUG_IMPOTANT("Multiplicity Assignment:\n");
 	for(i = 0; i < CODEWORD_LEN; i++)
 	{
@@ -194,15 +197,16 @@ int mul_assign()
 		}
 		DEBUG_IMPOTANT("\n");
 	}
+#endif	
 #endif
 	
 	return 0;
 }
 
 unsigned char syndrome_cal(unsigned char *recv, unsigned char *synd,
-								unsigned int cw_len, unsigned int msg_len)
+								unsigned long long cw_len, unsigned long long msg_len)
 {
-	unsigned int i = 0, j = 0;
+	unsigned long long i = 0, j = 0;
 	unsigned char tmp = 0xFF, tmp_sum = 0xFF;
 
 	for(i = 0; i < cw_len - msg_len; i++)
@@ -217,20 +221,22 @@ unsigned char syndrome_cal(unsigned char *recv, unsigned char *synd,
 		}
 		synd[i] = tmp_sum;
 	}
+#if (1 == CFG_DEBUG_INFO)	
 	DEBUG_INFO("Syndrome Polynomial:\n");
 	for(i = 0; i < cw_len - msg_len; i++)
 	{
 		DEBUG_INFO("%x ", synd[i]);
 	}
 	DEBUG_INFO("\n");
+#endif	
 }
 
 int rel_group()
 {
-	unsigned int i = 0, j = 0;
+	unsigned long long i = 0, j = 0;
 
 	float rel_thrd = 0.7;
-	unsigned int rel_cnt = 0, rel_flag = 0;
+	unsigned long long rel_cnt = 0, rel_flag = 0;
 
 	while(MESSAGE_LEN != rel_cnt)
 	{
@@ -280,6 +286,7 @@ int rel_group()
 		}
 	}
 
+#if (1 == CFG_DEBUG_INFO)
 	DEBUG_INFO("rel_seq: ");
 	for(i = 0; i < MESSAGE_LEN; i++)
 	{
@@ -292,13 +299,14 @@ int rel_group()
 		DEBUG_INFO("%d ", unrel_group_seq[i]);
 	}
 	DEBUG_INFO("\n");
+#endif
 	
 	return 0;
 }
 
 int tao_cal()
 {
-	unsigned int i = 0, j = 0;
+	unsigned long long i = 0, j = 0;
 	memset(tao, 0xFF, sizeof(unsigned char) * (CODEWORD_LEN - MESSAGE_LEN + 1));
 
 	unsigned char a[2] = {0, 0};
@@ -334,19 +342,22 @@ int tao_cal()
 	}
 #endif
 	memcpy(tao, reg, sizeof(unsigned char) * (CODEWORD_LEN - MESSAGE_LEN + 1));
+
+#if (1 == CFG_DEBUG_INFO)
 	DEBUG_INFO("tao: ");
 	for(j = 0; j < (CODEWORD_LEN - MESSAGE_LEN + 1); j++)
 	{
 		DEBUG_INFO("%x ", reg[j]);
 	}
 	DEBUG_INFO("\n");
-	
+#endif
+
 	return 0;
 }
 
 int sigma_cal()
 {
-	unsigned int i = 0, j = 0;
+	unsigned long long i = 0, j = 0;
 	memset(sigma, 0xFF, sizeof(unsigned char) * (((CODEWORD_LEN - MESSAGE_LEN) + (CODEWORD_LEN - MESSAGE_LEN + 1) - 1) - (CODEWORD_LEN - MESSAGE_LEN)));
 
 	unsigned char tmp[(CODEWORD_LEN - MESSAGE_LEN) + (CODEWORD_LEN - MESSAGE_LEN + 1) - 1];
@@ -358,27 +369,32 @@ int sigma_cal()
 
 	memcpy(sigma, tmp + (CODEWORD_LEN - MESSAGE_LEN), sizeof(unsigned char) * (((CODEWORD_LEN - MESSAGE_LEN) + (CODEWORD_LEN - MESSAGE_LEN + 1) - 1) - (CODEWORD_LEN - MESSAGE_LEN)));
 
+#if (1 == CFG_DEBUG_NOTICE)
 	DEBUG_NOTICE("sigma: ");
 	for(i = 0; i < (((CODEWORD_LEN - MESSAGE_LEN) + (CODEWORD_LEN - MESSAGE_LEN + 1) - 1) - (CODEWORD_LEN - MESSAGE_LEN)); i++)
 	{
 		DEBUG_NOTICE("%x ", sigma[i]);
 	}
 	DEBUG_NOTICE("\n");
+#endif
 
 	memcpy(omega, tmp, sizeof(unsigned char) * (CODEWORD_LEN - MESSAGE_LEN));
+
+#if (1 == CFG_DEBUG_NOTICE)
 	DEBUG_NOTICE("omega: ");
 	for(i = 0; i < (CODEWORD_LEN - MESSAGE_LEN); i++)
 	{
 		DEBUG_NOTICE("%x ", omega[i]);
 	}
 	DEBUG_NOTICE("\n");
+#endif
 
 	return 0;
 }
 
 unsigned char poly_eva(unsigned char *poly, unsigned char poly_len, unsigned char input_val)
 {
-	unsigned int i = 0;
+	unsigned long long i = 0;
 	unsigned char poly_val = 0xFF, tmp_product = 0;
 
 	for(i = 0; i < poly_len; i++)
@@ -393,7 +409,7 @@ unsigned char poly_eva(unsigned char *poly, unsigned char poly_len, unsigned cha
 
 int phi_cal()
 {
-	unsigned int i = 0, k = 0;
+	unsigned long long i = 0, k = 0;
 	unsigned char find_flag = 0;
 	unsigned char tao_dev[(CODEWORD_LEN - MESSAGE_LEN + 1) - 1]; 
 	unsigned char tmp = 0xFF, locator = 0xFF;
@@ -459,12 +475,15 @@ int phi_cal()
 			tao_dev[i] = tao[i + 1];
 		}
 	}
+
+#if (1 == CFG_DEBUG_NOTICE)	
 	DEBUG_NOTICE("tao_dev: ");
 	for(i = 0; i < (CODEWORD_LEN - MESSAGE_LEN); i++)
 	{
 		DEBUG_NOTICE("%x ", tao_dev[i]);
 	}
 	DEBUG_NOTICE("\n");
+#endif
 
 	for(i = 0; i < CODEWORD_LEN; i++)
 	{
@@ -502,6 +521,7 @@ int phi_cal()
 		}
 	}
 
+#if (1 == CFG_DEBUG_INFO)
 	DEBUG_INFO("phi: ");
 	for(i = 0; i < CODEWORD_LEN; i++)
 	{
@@ -516,12 +536,14 @@ int phi_cal()
 	}
 	DEBUG_INFO("\n");
 #endif	
+#endif
+
 	return 0;
 }
 
 unsigned char coordinate_trans(unsigned char locator, unsigned char r, unsigned char r_hd)
 {
-	unsigned int i = 0, j = 0;
+	unsigned long long i = 0, j = 0;
 	unsigned char coordinate = 0xFF;
 	unsigned char locator_product = 0, tmp_sum = 0xFF;
 #if 0
@@ -560,8 +582,8 @@ unsigned char coordinate_trans(unsigned char locator, unsigned char r, unsigned 
 
 int re_encoding()
 {
-	unsigned int i = 0, j = 0, k = 0, l = 0;
-	unsigned int tmp = 0;
+	unsigned long long i = 0, j = 0, k = 0, l = 0;
+	unsigned long long tmp = 0;
 	unsigned char find_flag = 0;
 	memset(syndrome, 0xFF, sizeof(unsigned char) * (CODEWORD_LEN - MESSAGE_LEN));
 
@@ -663,6 +685,7 @@ int re_encoding()
 	}
 #endif
 
+#if (1 == CFG_DEBUG_IMPOTANT)
 	DEBUG_IMPOTANT("beta:\n");
 	for(j = 0; j < CODEWORD_LEN; j++)
 	{
@@ -673,17 +696,20 @@ int re_encoding()
 		DEBUG_IMPOTANT("\n");
 	}
 	DEBUG_IMPOTANT("\n");
+#endif	
 
 	return 0;
 }
 
-int lex_order(unsigned int **lex_table, unsigned int d_x, unsigned int d_y)
+int lex_order(unsigned long long **lex_table, unsigned long long d_x, unsigned long long d_y)
 {
-	unsigned int i = 0, j = 0, k = 0;
-	unsigned int max_degree = 0, degree_index = 0;
-	unsigned int tmp_lex_table[d_x][d_y];
+	unsigned long long i = 0, j = 0, k = 0;
+	unsigned long long max_degree = 0, degree_index = 0;
+	unsigned long long tmp_lex_table[d_x][d_y];
 
-	DEBUG_NOTICE("tmp_lex_table:\n");
+	DEBUG_INFO("lex_order: %ld %ld\n", d_x, d_y);
+
+	DEBUG_INFO("tmp_lex_table:\n");
 	for(i = 0; i < d_x; i++)
 	{
 		for(j = 0; j < d_y; j++)
@@ -691,17 +717,19 @@ int lex_order(unsigned int **lex_table, unsigned int d_x, unsigned int d_y)
 #if 1	
 			tmp_lex_table[i][j] = 1 * i + (MESSAGE_LEN - 1) * j;
 #else//for test
-			*((unsigned int *)lex_table + i * d_y + j) = 1 * i + 1 * j;
+			*((unsigned long long *)lex_table + i * d_y + j) = 1 * i + 1 * j;
 #endif
 			if(max_degree < tmp_lex_table[i][j])
 			{
 				max_degree = tmp_lex_table[i][j];
 			}
-			DEBUG_NOTICE("%d ", tmp_lex_table[i][j]);
+			DEBUG_INFO("%ld ", tmp_lex_table[i][j]);
 		}
-		DEBUG_NOTICE("\n");
+		DEBUG_INFO("\n");
 	}
-	DEBUG_NOTICE("\n");
+	DEBUG_INFO("\n");
+
+	DEBUG_INFO("max_degree: %ld\n", max_degree);
 
 	for(k = 0; k <= max_degree; k++)
 	{
@@ -717,8 +745,9 @@ int lex_order(unsigned int **lex_table, unsigned int d_x, unsigned int d_y)
 			{
 				if(k == tmp_lex_table[i][j])
 				{
-					*((unsigned int *)lex_table + i * d_y + j) = degree_index;
+					*((unsigned long long *)lex_table + i * d_y + j) = degree_index;
 					degree_index = degree_index + 1;
+					//DEBUG_INFO("lex_table: %ld %ld\n", degree_index, *((unsigned long long *)lex_table + i * d_y + j));
 				}
 			}
 		}
@@ -727,14 +756,14 @@ int lex_order(unsigned int **lex_table, unsigned int d_x, unsigned int d_y)
 
 int koetter_interpolation()
 {
-	int i = 0, j = 0, k = 0, m = 0, n = 0;
-	unsigned int a = 0, b = 0, v = 0;
-	unsigned int tmp_sum = 0, tmp_real = 0;
+	unsigned long long i = 0, j = 0, k = 0, m = 0, n = 0;
+	unsigned long long a = 0, b = 0, v = 0;
+	unsigned long long tmp_sum = 0, tmp_real = 0;
 	unsigned char tmp_ff = 0xFF;
-	unsigned int l_s = 0xFFFF, l_w = 0, l_o = 0xFFFF;;
+	unsigned long long l_s = 0xFFFF, l_w = 0, l_o = 0xFFFF;;
 
-	unsigned int d_x = 0, d_y = 0, c = 0, term_num = 0, term_num_real = 0;
-	unsigned int d_x_max = 0, d_y_max = 0;
+	unsigned long long d_x = 0, d_y = 0, c = 0, term_num = 0, term_num_real = 0;
+	unsigned long long d_x_max = 0, d_y_max = 0;
 	for(i = 0; i < (CODEWORD_LEN + 1); i++)
 	{
 		for(j = 0; j < CODEWORD_LEN; j++)
@@ -744,22 +773,24 @@ int koetter_interpolation()
 	}
 	c = tmp_sum / 2;
 	tmp_sum = pow((1 + 8 * (float)c / (MESSAGE_LEN - 1)), 0.5);
-	tmp_sum = (1 + ((unsigned int)tmp_sum)) / 2;
-	d_y = (unsigned int)(floor(tmp_sum));
-	//d_y = floor((1 + (unsigned int)pow((1 + 8 * (float)c / (MESSAGE_LEN - 1)), 0.5)) / 2);
+	tmp_sum = (1 + ((unsigned long long)tmp_sum)) / 2;
+	d_y = (unsigned long long)(floor(tmp_sum));
+	//d_y = floor((1 + (unsigned long long)pow((1 + 8 * (float)c / (MESSAGE_LEN - 1)), 0.5)) / 2);
 	d_x = floor(c / (d_y + 1) + d_y * (CODEWORD_LEN - MESSAGE_LEN - 1) / 2);
 
-	d_x = d_x << LEX_TABLE_EXPAND_SIZE;
-	d_y = d_y << LEX_TABLE_EXPAND_SIZE;
+	//d_x = d_x << LEX_TABLE_EXPAND_SIZE;
+	//d_y = d_y << LEX_TABLE_EXPAND_SIZE;
+	d_x = d_x * LEX_TABLE_EXPAND_SIZE;
+	d_y = d_y * LEX_TABLE_EXPAND_SIZE;
 
-	unsigned int lex_order_table[d_x][d_y];
-	lex_order((unsigned int **)lex_order_table, d_x, d_y);
+	unsigned long long lex_order_table[d_x][d_y];
+	lex_order((unsigned long long **)lex_order_table, d_x, d_y);
 	DEBUG_INFO("lex_order_table:\n");
 	for(i = 0; i < d_x; i++)
 	{
 		for(j = 0; j < d_y; j++)
 		{
-			DEBUG_INFO("%d ", lex_order_table[i][j]);
+			DEBUG_INFO("%ld ", lex_order_table[i][j]);
 			if(c >= lex_order_table[i][j])
 			{
 				//term_num = term_num + 1;
@@ -804,13 +835,13 @@ int koetter_interpolation()
 #endif
 	unsigned char **g_table_c;
 	unsigned char **g_table_c_prev;
-	unsigned char *g_table_x;
-	unsigned char *g_table_y;
+	unsigned long long *g_table_x;
+	unsigned long long *g_table_y;
 	unsigned char *discrepancy;
-	unsigned int *weight_pol;
-	unsigned int *lexorder_pol;
+	unsigned long long *weight_pol;
+	unsigned long long *lexorder_pol;
 	unsigned char *tmp_table_c;
-	unsigned int *term_use_index;//malloc later
+	unsigned long long *term_use_index;//malloc later
 
 	g_table_c = (unsigned char**)malloc(sizeof(unsigned char*) * (d_y_max + 1));
 	g_table_c_prev = (unsigned char**)malloc(sizeof(unsigned char*) * (d_y_max + 1));
@@ -819,11 +850,11 @@ int koetter_interpolation()
   		g_table_c[i] = (unsigned char*)malloc(sizeof(unsigned char) * term_num_real);
 		g_table_c_prev[i] = (unsigned char*)malloc(sizeof(unsigned char) * term_num_real);
   	}
-	g_table_x = (unsigned char*)malloc(sizeof(unsigned char) * term_num_real);
-	g_table_y = (unsigned char*)malloc(sizeof(unsigned char) * term_num_real);
+	g_table_x = (unsigned long long*)malloc(sizeof(unsigned long long) * term_num_real);
+	g_table_y = (unsigned long long*)malloc(sizeof(unsigned long long) * term_num_real);
 	discrepancy = (unsigned char*)malloc(sizeof(unsigned char) * (d_y_max + 1));
-	weight_pol = (unsigned int*)malloc(sizeof(unsigned int) * (d_y_max + 1));
-	lexorder_pol = (unsigned int*)malloc(sizeof(unsigned int) * (d_y_max + 1));
+	weight_pol = (unsigned long long*)malloc(sizeof(unsigned long long) * (d_y_max + 1));
+	lexorder_pol = (unsigned long long*)malloc(sizeof(unsigned long long) * (d_y_max + 1));
 	tmp_table_c = (unsigned char*)malloc(sizeof(unsigned char) * term_num_real);
 
 	for(i = 0; i < (d_y_max + 1); i++)
@@ -834,12 +865,12 @@ int koetter_interpolation()
 			g_table_c_prev[i][j] = 0xFF;
 		}
 	}
-	memset(g_table_x, 0, sizeof(unsigned char) * term_num_real);
-	memset(g_table_y, 0, sizeof(unsigned char) * term_num_real);
+	memset(g_table_x, 0, sizeof(unsigned long long) * term_num_real);
+	memset(g_table_y, 0, sizeof(unsigned long long) * term_num_real);
 	memset(discrepancy, 0xFF, sizeof(unsigned char) * (d_y_max + 1));
 	memset(tmp_table_c, 0xFF, sizeof(unsigned char) * term_num_real);
-	memset(weight_pol, 0, sizeof(unsigned int) * (d_y_max + 1));
-	memset(lexorder_pol, 0xFFFF, sizeof(unsigned int) * (d_y_max + 1));
+	memset(weight_pol, 0, sizeof(unsigned long long) * (d_y_max + 1));
+	memset(lexorder_pol, 0xFFFF, sizeof(unsigned long long) * (d_y_max + 1));
 
 	/*init (a, b) pairs*/
 	k = 0;
@@ -921,7 +952,8 @@ int koetter_interpolation()
 					}
 				}
 			}
-			term_use_index = (unsigned int*)malloc(sizeof(unsigned int) * term_num);
+
+			term_use_index = (unsigned long long*)malloc(sizeof(unsigned long long) * term_num);
 			m = 0;
 			for(k = 0; k < term_num_real; k++)
 			{
@@ -937,8 +969,8 @@ int koetter_interpolation()
 			/*(r, s) pairs is related to the point (a, b), but not the constrain.*/
 			for(k = 0; k < term_num; k++) //for II, as (a, b) pairs
 			{
-				//DEBUG_NOTICE("*********************\n");
-				//DEBUG_NOTICE("k ready: %d %d | %d | (%d %d)\n", term_num, k, term_use_index[k], g_table_x[term_use_index[k]], g_table_y[term_use_index[k]]);
+				DEBUG_NOTICE("*********************\n");
+				DEBUG_NOTICE("k ready: %d %d | %d | (%d %d)\n", term_num, k, term_use_index[k], g_table_x[term_use_index[k]], g_table_y[term_use_index[k]]);
 				memset(discrepancy, 0xFF, sizeof(unsigned char) * (d_y_max + 1));
 
 				//l_s = 0xFF;
@@ -976,8 +1008,8 @@ int koetter_interpolation()
 								* (power_polynomial_table[i + 1][0])^(g_table_x[n] - g_table_x[k])
 								* (beta_matrix[i][j])^(g_table_y[n] - g_table_y[k]);
 #endif
-						//DEBUG_NOTICE("++++++++++\n");
-						//DEBUG_NOTICE("(m, n) ready: %d (%d %d) %x\n", m, g_table_x[n], g_table_y[n], g_table_c_prev[m][n]);
+						DEBUG_NOTICE("++++++++++\n");
+						DEBUG_NOTICE("(m, n) ready: %d (%d %d) %x\n", m, g_table_x[n], g_table_y[n], g_table_c_prev[m][n]);
 						tmp_real = real_combine(g_table_x[n], g_table_x[term_use_index[k]]) * real_combine(g_table_y[n], g_table_y[term_use_index[k]]);
 						//DEBUG_NOTICE("tmp_real: %d | %d %d %d | %d %d %d\n", tmp_real, g_table_x[n], g_table_x[term_use_index[k]], real_combine(g_table_x[n], g_table_x[term_use_index[k]]), g_table_y[n], g_table_y[term_use_index[k]], real_combine(g_table_y[n], g_table_y[term_use_index[k]]));
 						tmp_ff = gf_real_mutp_ff(tmp_real, g_table_c_prev[m][n]);
@@ -986,17 +1018,20 @@ int koetter_interpolation()
 						tmp_ff = gf_multp(tmp_ff, gf_pow_cal(power_polynomial_table[j + 1][0], (g_table_x[n] - g_table_x[term_use_index[k]])));
 						//DEBUG_NOTICE("tmp_ff: %x * (%x = %x^%x)\n", tmp_ff, gf_pow_cal(beta_matrix[i][j], (g_table_y[n] - g_table_y[term_use_index[k]])), beta_matrix[i][j], (g_table_y[n] - g_table_y[term_use_index[k]]));
 						tmp_ff = gf_multp(tmp_ff, gf_pow_cal(beta_matrix[i][j], (g_table_y[n] - g_table_y[term_use_index[k]])));
+						//DEBUG_NOTICE("gf_add: %x + %x\n", tmp_sum, tmp_ff);
 						tmp_sum = gf_add(tmp_sum, tmp_ff);
+#if (1 == CFG_DEBUG_NOTICE)						
 						if(0xFF != tmp_sum)
 						{
-							//DEBUG_NOTICE("tmp_sum: %x | %x\n", tmp_sum, tmp_ff);
+							DEBUG_NOTICE("tmp_sum: %x | %x\n", tmp_sum, tmp_ff);
 						}
+#endif						
 					}
 					
 					if(0xFF != tmp_sum)
 					{
 						discrepancy[m] = tmp_sum;
-						DEBUG_NOTICE("d: %d %d | %d %d | %d | %x\n", i, j, g_table_x[term_use_index[k]], g_table_y[term_use_index[k]], m, discrepancy[m]);
+						DEBUG_NOTICE("d: %d %d | %d %d | %d | %d\n", i, j, g_table_x[term_use_index[k]], g_table_y[term_use_index[k]], m, discrepancy[m]);
 					}
 
 					if(0xFF != discrepancy[m])
@@ -1085,7 +1120,7 @@ int koetter_interpolation()
 #endif
 						g_table_c[m][n] = gf_add(g_table_c[m][n], tmp_table_c[n]);
 					}
-
+#if (1 == CFG_DEBUG_NOTICE)
 					for(n = 0; n < term_num_real; n++)
 					{
 						if(0xFF != g_table_c[m][n])
@@ -1093,6 +1128,7 @@ int koetter_interpolation()
 							DEBUG_NOTICE("Q_l: %d | %d %d | %x\n", m, g_table_x[n], g_table_y[n], g_table_c[m][n]);
 						}
 					}
+#endif					
 				}
 				//DEBUG_NOTICE("update normal Q_l OK\n");
 
@@ -1195,10 +1231,12 @@ int koetter_interpolation()
 					for(n = 0; n < term_num_real; n++)
 					{
 						g_table_c_prev[m][n] = g_table_c[m][n];
+#if (1 == CFG_DEBUG_NOTICE)						
 						if(0xFF != g_table_c_prev[m][n])
 						{
 							DEBUG_NOTICE("g_table_c_prev: %d | %d %d | %d %d | %x\n", m, lex_order_table[g_table_x[n]][g_table_y[n]], (g_table_x[n] + (MESSAGE_LEN - 1) * g_table_y[n]), g_table_x[n], g_table_y[n], g_table_c_prev[m][n]);
 						}
+#endif						
 					}
 				}
 			}
@@ -1305,7 +1343,7 @@ int koetter_interpolation()
 
 int g_term_init()
 {
-	unsigned int i = 0, j = 0, k = 0;
+	unsigned long long i = 0, j = 0, k = 0;
 
 	for(k = 0; k < LAYER_NUM; k++)
 	{
@@ -1336,7 +1374,7 @@ int g_term_init()
 
 int f_root_init()
 {
-	unsigned int i = 0, j = 0;
+	unsigned long long i = 0, j = 0;
 
 	for(i = 0; i < ROOT_SIZE; i++)
 	{
@@ -1352,9 +1390,9 @@ int f_root_init()
 	return 0;
 }
 
-int g_term_new_gen(unsigned char layer_idx, unsigned char tern_idx, unsigned char root_insert)
+int g_term_new_gen(unsigned char layer_idx, unsigned long long tern_idx, unsigned char root_insert)
 {
-	unsigned int i = 0, j = 0, k = 0, l = 0, r = 0, s = 0;
+	unsigned long long i = 0, j = 0, k = 0, l = 0, r = 0, s = 0;
 
 	unsigned char tmp = 0xFF;
 	unsigned char g_term_c_expand[TERM_SIZE * TERM_SIZE];
@@ -1480,7 +1518,7 @@ int g_term_new_gen(unsigned char layer_idx, unsigned char tern_idx, unsigned cha
 				{
 					g_term_c_expand[r] = tmp_g_term_c_expand[r];
 					tmp_g_term_c_expand[r] = 0xFF;
-
+#if (1 == CFG_DEBUG_NOTICE)
 					if(0xFF != g_term_c_expand[r])
 					{
 						DEBUG_NOTICE("g_term_expand_update: %d %d | %x\n",
@@ -1488,6 +1526,7 @@ int g_term_new_gen(unsigned char layer_idx, unsigned char tern_idx, unsigned cha
 							    g_term_y[r],
 							    g_term_c_expand[r]);
 					}
+#endif					
 				}
 			}
 
@@ -1583,6 +1622,7 @@ int g_term_new_gen(unsigned char layer_idx, unsigned char tern_idx, unsigned cha
 #endif
 		
 		g_term_c[layer_idx + 1][tern_idx][r] = gf_add(g_term_c_expand_store[r], g_term_c[layer_idx + 1][tern_idx][r]);
+#if (1 == CFG_DEBUG_NOTICE)
 		if(0xFF != g_term_c[layer_idx + 1][tern_idx][r])
 		{
 			DEBUG_NOTICE("g_term_update: %d | %d %d | %x\n",
@@ -1591,6 +1631,7 @@ int g_term_new_gen(unsigned char layer_idx, unsigned char tern_idx, unsigned cha
 				    g_term_y[r],
 				    g_term_c[layer_idx + 1][tern_idx][r]);
 		}
+#endif		
 	}
 
 	DEBUG_NOTICE("*********************\n");
@@ -1670,6 +1711,7 @@ int g_term_new_gen(unsigned char layer_idx, unsigned char tern_idx, unsigned cha
 	}
 #endif
 
+#if (1 == CFG_DEBUG_NOTICE)
 	DEBUG_NOTICE("*********************\n");
 	for(r = 0; r < (TERM_SIZE * TERM_SIZE); r++)
 	{
@@ -1682,13 +1724,14 @@ int g_term_new_gen(unsigned char layer_idx, unsigned char tern_idx, unsigned cha
 				    g_term_c[layer_idx + 1][tern_idx][r]);
 		}
 	}
+#endif
 	
 	return 0;
 }
 
-int g_term_0_y_cal(unsigned char layer_idx, unsigned char tern_idx)
+int g_term_0_y_cal(unsigned long long layer_idx, unsigned long long tern_idx)
 {
-	unsigned int i = 0, j = 0;
+	unsigned long long i = 0, j = 0;
 
 #if 0
 	/*clear*/
@@ -1752,6 +1795,7 @@ int g_term_0_y_cal(unsigned char layer_idx, unsigned char tern_idx)
 		else
 		{
 			g_term_0_y_c[layer_idx][tern_idx][j] = g_term_c[layer_idx][tern_idx][j];
+#if (1 == CFG_DEBUG_NOTICE)
 			if(0xFF != g_term_0_y_c[layer_idx][tern_idx][j])
 			{
 				DEBUG_NOTICE("g_term_0_y: %d | %d %d | %x\n",
@@ -1760,6 +1804,7 @@ int g_term_0_y_cal(unsigned char layer_idx, unsigned char tern_idx)
 						g_term_y[j],
 						g_term_0_y_c[layer_idx][tern_idx][j]);
 			}
+#endif
 		}
 	}
 #endif
@@ -1767,11 +1812,11 @@ int g_term_0_y_cal(unsigned char layer_idx, unsigned char tern_idx)
 	return 0;
 }
 
-unsigned char g_term_x_0_cal(unsigned char layer_idx, unsigned char tern_idx)
+unsigned char g_term_x_0_cal(unsigned long long layer_idx, unsigned long long tern_idx)
 {
 	unsigned char val = 0xFF;
 
-	unsigned int i = 0, j = 0;
+	unsigned long long i = 0, j = 0;
 
 	/*clear*/
 	for(j = 0; j < (TERM_SIZE * TERM_SIZE); j++)
@@ -1815,10 +1860,10 @@ unsigned char g_term_x_0_cal(unsigned char layer_idx, unsigned char tern_idx)
 	return val;
 }
 
-int chien_searching_for_g_0_y(unsigned char layer_idx, unsigned char tern_idx, unsigned char root_test)
+int chien_searching_for_g_0_y(unsigned long long layer_idx, unsigned long long tern_idx, unsigned char root_test)
 {
-	int is_root = 0;
-	unsigned int k = 0;
+	long long is_root = 0;
+	unsigned long long k = 0;
 	unsigned char tmp = 0xFF, tmp_sum = 0xFF;
 	
 	for(k = 0; k < (TERM_SIZE * TERM_SIZE); k++)
@@ -2182,8 +2227,8 @@ int test_factorization_init()
 
 int rr_factorization()
 {
-	int i = 0, j = 0, k = 0, l = 0, r = 0, s = 0;
-	int is_root = 0;
+	unsigned long long i = 0, j = 0, k = 0, l = 0, r = 0, s = 0;
+	long long is_root = 0;
 
 	//test_factorization_init();
 	f_root_init();
@@ -2221,13 +2266,13 @@ int rr_factorization()
 	return 0;
 }
 
-unsigned int hamm_distance_cal(unsigned char *a,
+unsigned long long hamm_distance_cal(unsigned char *a,
 									  unsigned char *b,
-									  unsigned int len)
+									  unsigned long long len)
 {
-	unsigned int hamm_distance = 0;
+	unsigned long long hamm_distance = 0;
 
-	int i = 0, j = 0;
+	long long i = 0, j = 0;
 	unsigned char tmp_a = 0, tmp_b = 0;
 
 	for(i = 0; i < len; i++)
@@ -2251,8 +2296,8 @@ unsigned int hamm_distance_cal(unsigned char *a,
 
 int check_rr_decoded_result()
 {
-	int r = 0, s = 0;
-	unsigned int hamm_distance = 0xFFFF, tmp = 0;
+	long long r = 0, s = 0;
+	unsigned long long hamm_distance = 0xFFFF, tmp = 0;
 	unsigned char tmp_decoded_message[MESSAGE_LEN];
 	unsigned char tmp_decoded_codeword[CODEWORD_LEN];
 	
@@ -2297,6 +2342,7 @@ int check_rr_decoded_result()
 		}
 	}
 
+#if (1 == CFG_DEBUG_IMPOTANT)
 	if(0xFFFF != hamm_distance)
 	{
 		DEBUG_IMPOTANT("Received Codeword:\n");
@@ -2326,13 +2372,15 @@ int check_rr_decoded_result()
 	{
 		DEBUG_IMPOTANT("Decoding Fail!\n");
 	}
+#endif
 
 	return 0;
 }
 
 int as_decoding()
 {
-	unsigned int i = 0;
+#if (1 == CFG_DEBUG_IMPOTANT)	
+	unsigned long long i = 0;
 
 	DEBUG_IMPOTANT("Received:\n");
 	for(i = 0; i < CODEWORD_LEN; i++)
@@ -2340,6 +2388,10 @@ int as_decoding()
 		DEBUG_IMPOTANT("%x ", received_polynomial[i]);
 	}
 	DEBUG_IMPOTANT("\n");
+#endif
+
+	memset(decoded_codeword, 0xFF, sizeof(unsigned char) * CODEWORD_LEN);
+	memset(decoded_message, 0xFF, sizeof(unsigned char) * MESSAGE_LEN);
 
 	g_term_init();
 

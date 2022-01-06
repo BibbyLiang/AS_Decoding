@@ -17,7 +17,14 @@ int bpsk_mod(unsigned char *input_seq,
 		for(j = 0; j < GF_Q; j++)
 		{
 			/*LSB first, small-endian*/
-			tmp_input = (power_polynomial_table[input_seq[i] + 0x1][1] >> j) & 0x1;
+			if(0xFF == input_seq[i])
+			{
+				tmp_input = (power_polynomial_table[0][1] >> j) & 0x1;
+			}
+			else
+			{
+				tmp_input = (power_polynomial_table[input_seq[i] + 0x1][1] >> j) & 0x1;
+			}
 			output_seq[k][0] = 1 - (float)(2 * tmp_input);
 			output_seq[k][1] = 0.0;
 
@@ -38,12 +45,14 @@ int bpsk_mod(unsigned char *input_seq,
 		}
 	}
 
+#if (1 == CFG_DEBUG_INFO)
 	DEBUG_INFO("bpsk modulation:\n");
 	for(i = 0; i < output_len; i++)
 	{
 		DEBUG_INFO("%f %f\n", output_seq[i][0], output_seq[i][1]);
 	}
 	DEBUG_INFO("\n");
+#endif
 
 	return 0;
 }
@@ -108,12 +117,14 @@ int bpsk_demod(float **input_seq,
 	}
 #endif	
 
+#if (1 == CFG_DEBUG_INFO)
 	DEBUG_INFO("bpsk demodulation:\n");
 	for(i = 0; i < output_len; i++)
 	{
 		DEBUG_INFO("%x\n", output_seq[i]);
 	}
 	DEBUG_INFO("\n");
+#endif
 
 	return 0;
 }

@@ -8,7 +8,7 @@
 #include "channel.h"
 #include "time.h"
 
-#define SIMULATION_TIMES	1000
+//#define MONITOR_TIMES	10000
 
 void init_simulation()
 {
@@ -20,27 +20,54 @@ void init_simulation()
 
 void main()
 {
-	unsigned char i = 0, j = 0;
-	unsigned int symbol_num = CODEWORD_LEN * GF_Q * BITS_PER_SYMBOL_BPSK;
-	unsigned long iter = 0;
-	unsigned long bit_err = 0, symbol_err = 0, frame_err = 0;
-	unsigned long uncoded_bit_err = 0, uncoded_symbol_err = 0, uncoded_frame_err = 0;
+	unsigned long long i = 0, j = 0;
+	unsigned long long symbol_num = CODEWORD_LEN * GF_Q * BITS_PER_SYMBOL_BPSK;
+	unsigned long long iter = 0;
+	unsigned long long bit_err = 0, symbol_err = 0, frame_err = 0;
+	unsigned long long uncoded_bit_err = 0, uncoded_symbol_err = 0, uncoded_frame_err = 0;
 	unsigned char frame_err_flag = 0, uncoded_frame_err_flag = 0;
 	unsigned char tmp_mes = 0, tmp_dec = 0;
 
-	float snr = 7;
+	clock_t start, stop;
+	float runtime;
+
+	float snr = 15;
+	unsigned long iter_cnt = 1, monitor_cnt = 1;
+#if 1	
+	printf("Please Input SNR: ");
+	scanf("%f", &snr);
+	printf("Please Input Simulation Times: ");
+	scanf("%ld", &iter_cnt);
+	printf("Please Monitor Times: ");
+	scanf("%ld", &monitor_cnt);
+#endif
+	FILE *frc;
 
 	float **mod_seq;
 	mod_seq = (float**)malloc(sizeof(float*) * symbol_num);
 	for (i = 0; i < symbol_num; i++)
 	{
 		mod_seq[i] = (float*)malloc(sizeof(float) * 2);
+		//DEBUG_NOTICE("%d %d\n", symbol_num, i);
 	}
 
 	init_simulation();
 
-	for(iter = 0; iter < SIMULATION_TIMES; iter++)
+#if (1 == SYS_ENC)
+	gen_poly_trans();
+#endif
+
+	start = clock();
+
+	for(iter = 0; iter <= iter_cnt; iter++)
 	{
+
+		for(i = 0; i < MESSAGE_LEN; i++)
+		{
+			j = genrand_int32() % GF_FIELD;
+			//message_polynomial[i] = 0x0;
+			message_polynomial[i] = power_polynomial_table[j][0];
+		}
 
 #if (1 == SYS_ENC)
 		systematic_encoding();
@@ -53,16 +80,14 @@ void main()
 				 (float **)mod_seq,
 				 symbol_num);
 
-#if 1
 		DEBUG_IMPOTANT("Transmission over Channel:\n");
 		for(i = 0; i < symbol_num; i++)
 		{
 			mod_seq[i][0] = mod_seq[i][0] + awgn_gen(snr);
-			//mod_seq[i][1] = mod_seq[i][1] + awgn_gen(snr);
+			mod_seq[i][1] = mod_seq[i][1] + awgn_gen(snr);
 			DEBUG_IMPOTANT("%f %f\n", mod_seq[i][0], mod_seq[i][1]);
 		}
 		DEBUG_IMPOTANT("\n");
-#endif
 
 		bpsk_demod((float **)mod_seq,
 				 symbol_num,
@@ -102,11 +127,13 @@ void main()
 		}
 #endif
 
+#if 1
 		mul_assign();
 		
 		re_encoding();
 		
 		as_decoding();
+#endif
 
 		for(i = 0; i < MESSAGE_LEN; i++)
 		{
@@ -133,15 +160,61 @@ void main()
 		}
 		frame_err_flag = 0;
 
+		if(0 == (iter % monitor_cnt))
+		{
+			stop = clock();
+			runtime = (stop - start) / 1000.0000;
+			
+			DEBUG_SYS("---------------------\n");
+			DEBUG_SYS("Time: %fs\n", runtime);
+			DEBUG_SYS("Frame: %ld\n", iter);
+			DEBUG_SYS("Uncoded Frame Error: %ld\n", uncoded_frame_err);
+			DEBUG_SYS("Uncoded Symbol Error: %ld\n", uncoded_symbol_err);
+			DEBUG_SYS("Uncoded Bit Error: %ld\n", uncoded_bit_err);
+			DEBUG_SYS("Frame Error: %ld\n", frame_err);
+			DEBUG_SYS("Symbol Error: %ld\n", symbol_err);
+			DEBUG_SYS("Bit Error: %ld\n", bit_err);
+
+			frc = fopen("runing_log.txt", "a+");
+			fprintf(frc, "---------------------\n");
+			fprintf(frc, "Time: %fs\n", runtime);
+			fprintf(frc, "Frame: %ld\n", iter);
+			fprintf(frc, "Uncoded Frame Error: %ld\n", uncoded_frame_err);
+			fprintf(frc, "Uncoded Symbol Error: %ld\n", uncoded_symbol_err);
+			fprintf(frc, "Uncoded Bit Error: %ld\n", uncoded_bit_err);
+			fprintf(frc, "Frame Error: %ld\n", frame_err);
+			fprintf(frc, "Symbol Error: %ld\n", symbol_err);
+			fprintf(frc, "Bit Error: %ld\n", bit_err);
+		    fclose(frc);
+			frc = NULL;
+		}
+
 	}
 
-	DEBUG_SYS("Frame: %ld\n", SIMULATION_TIMES);
+	stop = clock();
+	runtime = (stop - start) / 1000.0000;
+
+	DEBUG_SYS("---------------------\n");
+	DEBUG_SYS("Time: %fs\n", runtime);
+	DEBUG_SYS("Frame: %ld\n", iter_cnt);
 	DEBUG_SYS("Uncoded Frame Error: %ld\n", uncoded_frame_err);
 	DEBUG_SYS("Uncoded Symbol Error: %ld\n", uncoded_symbol_err);
 	DEBUG_SYS("Uncoded Bit Error: %ld\n", uncoded_bit_err);
 	DEBUG_SYS("Frame Error: %ld\n", frame_err);
 	DEBUG_SYS("Symbol Error: %ld\n", symbol_err);
 	DEBUG_SYS("Bit Error: %ld\n", bit_err);
+	frc = fopen("runing_log.txt", "a+");
+	fprintf(frc, "---------------------\n");
+	fprintf(frc, "Time: %fs\n", runtime);
+	fprintf(frc, "Frame: %ld\n", iter);
+	fprintf(frc, "Uncoded Frame Error: %ld\n", uncoded_frame_err);
+	fprintf(frc, "Uncoded Symbol Error: %ld\n", uncoded_symbol_err);
+	fprintf(frc, "Uncoded Bit Error: %ld\n", uncoded_bit_err);
+	fprintf(frc, "Frame Error: %ld\n", frame_err);
+	fprintf(frc, "Symbol Error: %ld\n", symbol_err);
+	fprintf(frc, "Bit Error: %ld\n", bit_err);
+    fclose(frc);
+	frc = NULL;
 
 	for (i = 0; i < symbol_num; i++)
 	{
