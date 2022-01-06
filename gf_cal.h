@@ -1,10 +1,14 @@
 #ifndef GF_CAL_H
 #define GF_CAL_H
 
-#define GF_Q			 6
+#define GF_Q			 4
 #if (3 == GF_Q)
 #define GF_FIELD        8
 #define MESSAGE_LEN     3
+#endif
+#if (4 == GF_Q)
+#define GF_FIELD        16
+#define MESSAGE_LEN     7
 #endif
 #if (6 == GF_Q)
 #define GF_FIELD        64

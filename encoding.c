@@ -25,6 +25,22 @@ unsigned char generator_polynomial[CODEWORD_LEN - MESSAGE_LEN + 1] =
 };
 #endif
 
+#if (4 == GF_Q)
+/*n = 15, k = 7*/
+unsigned char generator_polynomial[CODEWORD_LEN - MESSAGE_LEN + 1] =
+{
+	1,
+	9,
+	4,
+	3,
+	4,
+	13,
+	6,
+	14,
+	12
+};
+#endif
+
 #if (6 == GF_Q)
 /*n = 63, k = 21*/
 unsigned char generator_polynomial[CODEWORD_LEN - MESSAGE_LEN + 1] =

@@ -18,14 +18,19 @@ float awgn_gen(float snr)
 		w = 0.999999;
 	}
 
+#if 1
 	r = gaussrand();
+	val = r * (sqrt(E_B / pow(10, snr / 10) / 2));
+#else
+	r = sqrt(2.0 * log(1.0 / (1.0 - w)));
 
 	/*convert it to modulation constellation*/
-	val = (float)r * cos(2 * PI * w);
+	val = r * (float)cos(2 * PI * w);
 
 	val = val * (sqrt(E_B / pow(10, snr / 10) / 2));
-
-	//printf("gauss_val: %f\n", val);
+#endif
+	DEBUG_NOTICE("val: %f %f %f\n", r, w, val);
+	DEBUG_NOTICE("gauss_val: %f\n", val);
 
 	return val;
 }

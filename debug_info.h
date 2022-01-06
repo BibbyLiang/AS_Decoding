@@ -3,10 +3,18 @@
 
 #include <stdio.h>
 
+#define TEST_MODE	0
+
 #define CFG_DEBUG_SYS			1
+#if (1 == TEST_MODE)
+#define CFG_DEBUG_IMPOTANT		1
+#define CFG_DEBUG_INFO			1
+#define CFG_DEBUG_NOTICE		1
+#else
 #define CFG_DEBUG_IMPOTANT		0
 #define CFG_DEBUG_INFO			0
 #define CFG_DEBUG_NOTICE		0
+#endif
 
 #if (1 == CFG_DEBUG_SYS)
 #define DEBUG_SYS			printf

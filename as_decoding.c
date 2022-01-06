@@ -933,12 +933,14 @@ int koetter_interpolation()
 	{
 		for(i = 0; i < (CODEWORD_LEN + 1); i++)//for I, as n
 		{
+			
+			//DEBUG_INFO("point: %d %d | %d %d | (%x %x)\n", CODEWORD_LEN, (CODEWORD_LEN + 1), i, j, power_polynomial_table[j + 1][0], beta_matrix[i][j]);
 			if(0 == mul_matrix[i][j])
 			{
 				continue;
 			}
 			DEBUG_INFO("-------------------------------------------\n");
-			DEBUG_INFO("point: (%x %x)\n", power_polynomial_table[j + 1][0], beta_matrix[i][j]);
+			DEBUG_INFO("point: %d %d | %d %d | (%x %x)\n", CODEWORD_LEN, (CODEWORD_LEN + 1), i, j, power_polynomial_table[j + 1][0], beta_matrix[i][j]);
 
 			/*the (a, b) pairs should be init here*/
 			term_num = 0;//clear here
@@ -1390,7 +1392,7 @@ int f_root_init()
 	return 0;
 }
 
-int g_term_new_gen(unsigned char layer_idx, unsigned long long tern_idx, unsigned char root_insert)
+int g_term_new_gen(unsigned long long layer_idx, unsigned long long tern_idx, unsigned char root_insert)
 {
 	unsigned long long i = 0, j = 0, k = 0, l = 0, r = 0, s = 0;
 
@@ -1462,26 +1464,70 @@ int g_term_new_gen(unsigned char layer_idx, unsigned long long tern_idx, unsigne
 
 	for(k = 0; k < (TERM_SIZE * TERM_SIZE); k++)//for every term contain "y"
 	{
+		if(0 == k)
+		{
+			DEBUG_NOTICE("g_term_check_err_k_1: %d | %d %d\n",
+			k,
+			g_term_x[k],
+			g_term_y[k]);
+			if((0 != g_term_x[k])
+				|| (0 != g_term_y[k]))
+			{
+				while(1);
+			}
+		}
+
 		g_term_c[layer_idx + 1][tern_idx][k] = g_term_c[layer_idx][tern_idx][k];
+
+		if(0 == k)
+		{
+			DEBUG_NOTICE("g_term_check_err_k_2: %d %d %d | %d | %d %d\n",
+			layer_idx,
+			tern_idx,
+			POLY_NUM,
+			k,
+			g_term_x[k],
+			g_term_y[k]);
+			if((0 != g_term_x[k])
+				|| (0 != g_term_y[k]))
+			{
+				while(1);
+			}
+		}
 		
 		if((0 != g_term_y[k])
 			&& (0xFF != g_term_c[layer_idx][tern_idx][k]))
 		{
 			DEBUG_NOTICE("*********************\n");
 			DEBUG_NOTICE("g_term_have_y: %d | %d %d | %x\n",
-				    tern_idx,
-				    g_term_x[k],
-				    g_term_y[k],
-				    g_term_c[layer_idx][tern_idx][k]);
+		    tern_idx,
+		    g_term_x[k],
+		    g_term_y[k],
+		    g_term_c[layer_idx][tern_idx][k]);
 			
 			for(l = 0; l < (g_term_y[k] - 0); l++)//for pow_cal, g*m => tmp
 			{
 				//DEBUG_NOTICE("*********************\n");
 				for(i = 0; i < (TERM_SIZE * TERM_SIZE); i++)//for every a
 				{
+					if(0 == i)
+					{
+						DEBUG_NOTICE("g_term_check_err_i: %ld | %ld %ld | %x\n",
+						i,
+						g_term_x[i],
+						g_term_y[i],
+						g_term_c_expand[i]);
+						if((0 != g_term_x[i])
+							|| (0 != g_term_y[i]))
+						{
+							while(1);
+						}
+					}
+					
 					if(0xFF != g_term_c_expand[i])
 					{
-						DEBUG_NOTICE("g_term_c_expand: %d %d | %x\n",
+						DEBUG_NOTICE("g_term_c_expand: %ld | %ld %ld | %x\n",
+						i,
 					    g_term_x[i],
 					    g_term_y[i],
 					    g_term_c_expand[i]);
@@ -1781,6 +1827,19 @@ int g_term_0_y_cal(unsigned long long layer_idx, unsigned long long tern_idx)
 
 	for(j = 0; j < (TERM_SIZE * TERM_SIZE); j++)
 	{
+		if(0 == j)
+		{
+			DEBUG_NOTICE("g_term_check_err_j: %d | %d %d\n",
+			j,
+			g_term_x[j],
+			g_term_y[j]);
+			if((0 != g_term_x[j])
+				|| (0 != g_term_y[j]))
+			{
+				while(1);
+			}
+		}
+		
 		if((0 != g_term_x[j])
 			&& (0xFF != g_term_c[layer_idx][tern_idx][j]))
 		{
@@ -2258,6 +2317,12 @@ int rr_factorization()
 					g_term_new_gen(s, l, f_root_val[s][l]);
 
 					l = l + 1;
+					if(POLY_NUM <= l)
+					{
+						/*just exit*/
+						k = GF_FIELD;
+						r = f_root_cnt[s];
+					}
 				}
 			}
 		}
