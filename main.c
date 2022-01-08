@@ -53,6 +53,8 @@ void main()
 		//DEBUG_NOTICE("%d %d\n", symbol_num, i);
 	}
 
+	g_term_malloc();
+
 	init_simulation();
 
 #if (1 == SYS_ENC)
@@ -76,12 +78,18 @@ void main()
 			for(i = 0; i < MESSAGE_LEN; i++)
 			{
 				j = genrand_int32() % GF_FIELD;
-#if (1 == TEST_MODE)			
+#if (1 == TEST_MODE)
 				message_polynomial[i] = 0x0;
 #else
 				message_polynomial[i] = power_polynomial_table[j][0];
 #endif			
 			}
+
+#if 0
+			message_polynomial[0] = 0xFF;
+			message_polynomial[1] = 0x1;
+			message_polynomial[2] = 0x6;
+#endif
 
 #if (1 == SYS_ENC)
 			systematic_encoding();
@@ -209,6 +217,7 @@ void main()
 
 		stop = clock();
 		runtime = (stop - start) / 1000.0000;
+		iter = iter - 1;
 
 		DEBUG_SYS("*********************************\n");
 		DEBUG_SYS("Time: %fs\n", runtime);
@@ -231,6 +240,14 @@ void main()
 		fprintf(frc, "Frame Error: %ld\n", frame_err);
 		fprintf(frc, "Symbol Error: %ld\n", symbol_err);
 		fprintf(frc, "Bit Error: %ld\n", bit_err);
+		fprintf(frc, "Uncoded Results: %.10lf %.10lf %.10lf\n", 
+			    (double)uncoded_frame_err / (double)iter,
+			    (double)uncoded_symbol_err / (double)iter / CODEWORD_LEN * BITS_PER_SYMBOL_BPSK,
+			    (double)uncoded_bit_err / (double)iter / CODEWORD_LEN * BITS_PER_SYMBOL_BPSK / GF_Q);
+		fprintf(frc, "Decoded Results: %.10lf %.10lf %.10lf\n", 
+				(double)frame_err / (double)iter,
+				(double)symbol_err / (double)iter / CODEWORD_LEN * BITS_PER_SYMBOL_BPSK,
+				(double)bit_err / (double)iter / CODEWORD_LEN * BITS_PER_SYMBOL_BPSK / GF_Q);
 	    fclose(frc);
 		frc = NULL;
 
@@ -243,6 +260,8 @@ void main()
   	}
 	free(mod_seq);
 	mod_seq = NULL;
+
+	g_term_destroy();
 
 	return;
 }

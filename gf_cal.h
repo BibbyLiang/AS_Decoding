@@ -1,7 +1,8 @@
 #ifndef GF_CAL_H
 #define GF_CAL_H
 
-#define GF_Q			 4
+#define GF_Q			 3
+
 #if (3 == GF_Q)
 #define GF_FIELD        8
 #define MESSAGE_LEN     3
@@ -13,6 +14,10 @@
 #if (6 == GF_Q)
 #define GF_FIELD        64
 #define MESSAGE_LEN     21
+#endif
+#if (8 == GF_Q)
+#define GF_FIELD        256
+#define MESSAGE_LEN     239
 #endif
 #define CODEWORD_LEN    (GF_FIELD - 1)   
 
@@ -40,4 +45,5 @@ extern int gf_multp_poly_hw(unsigned char* a, unsigned char len_a,
 extern unsigned long long real_combine(unsigned long long n, unsigned long long k);
 extern unsigned char gf_real_mutp_ff(unsigned long long n, unsigned char ff);
 unsigned char gf_pow_cal(unsigned char ff, unsigned long long n);
+extern unsigned char phase_trans(unsigned char phase);
 #endif

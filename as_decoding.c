@@ -42,17 +42,20 @@ unsigned char omega[CODEWORD_LEN - MESSAGE_LEN];
 unsigned char sigma[((CODEWORD_LEN - MESSAGE_LEN) + (CODEWORD_LEN - MESSAGE_LEN + 1) - 1) - (CODEWORD_LEN - MESSAGE_LEN)];
 unsigned char erasure_polynomial[CODEWORD_LEN];
 unsigned char phi[CODEWORD_LEN];
-unsigned char g_term_c[LAYER_NUM][POLY_NUM][TERM_SIZE * TERM_SIZE];
+//unsigned char g_term_c[LAYER_NUM][POLY_NUM][TERM_SIZE * TERM_SIZE];
 unsigned long long g_term_x[TERM_SIZE * TERM_SIZE];
 unsigned long long g_term_y[TERM_SIZE * TERM_SIZE];
-unsigned char g_term_0_y_c[LAYER_NUM][POLY_NUM][TERM_SIZE * TERM_SIZE];
-unsigned char g_term_x_0_c[LAYER_NUM][POLY_NUM][TERM_SIZE * TERM_SIZE];
+unsigned char g_term_0_y_c[LAYER_NUM][TERM_SIZE * TERM_SIZE];
+unsigned char g_term_x_0_c[LAYER_NUM][TERM_SIZE * TERM_SIZE];
 unsigned char f_root_val[ROOT_SIZE][ROOT_SIZE];
 unsigned char f_root_prev[ROOT_SIZE][ROOT_SIZE];
 unsigned long long f_root_cnt[ROOT_SIZE + 1];//used for next layer
 unsigned long long sml_poly = 0xFF;
 unsigned char decoded_codeword[CODEWORD_LEN];
 unsigned char decoded_message[MESSAGE_LEN];
+
+unsigned char ***g_term_c_p;
+unsigned char g_term_phase = 0;
 
 void find_max_val(float matrix[][CODEWORD_LEN], unsigned long long col,
 					 unsigned char* m_ptr, unsigned char* n_ptr)
@@ -1302,11 +1305,19 @@ int koetter_interpolation()
 				if((g_table_x[n] == g_term_x[k])
 					&& (g_table_y[n] == g_term_y[k]))
 				{
+#if 0
 					g_term_c[0][0][k] = g_table_c[sml_poly][n];
 					DEBUG_IMPOTANT("g_term: %d | %d %d | %x\n", sml_poly,
 														g_term_x[k],
 														g_term_y[k],
 														g_term_c[0][0][k]);
+#else
+					g_term_c_p[g_term_phase][0][k] = g_table_c[sml_poly][n];
+					DEBUG_IMPOTANT("g_term: %d | %d %d | %x\n", sml_poly,
+														g_term_x[k],
+														g_term_y[k],
+														g_term_c_p[g_term_phase][0][k]);
+#endif
 					break;
 				}
 			}
@@ -1343,19 +1354,71 @@ int koetter_interpolation()
 	return 0;
 }
 
+int g_term_malloc()
+{
+	unsigned long long i = 0, j = 0;
+
+	g_term_c_p = (unsigned char***)malloc(sizeof(unsigned char**) * LAYER_NUM);
+	for (i = 0; i < LAYER_NUM; i++)
+	{
+		DEBUG_SYS("malloc g_term: %d\n", i);
+	
+  		g_term_c_p[i] = (unsigned char**)malloc(sizeof(unsigned char*) * POLY_NUM);
+
+		for(j = 0; j < POLY_NUM; j++)
+		{
+			g_term_c_p[i][j] = (unsigned char*)malloc(sizeof(unsigned char) * (TERM_SIZE * TERM_SIZE));
+		}
+  	}
+	DEBUG_SYS("malloc g_term OK\n", i);
+	
+	return 0;
+}
+
+int g_term_destroy()
+{
+	unsigned long long i = 0, j = 0;
+
+	for (i = 0; i < LAYER_NUM; i++)
+	{
+		for(j = 0; j < POLY_NUM; j++)
+		{
+			free(g_term_c_p[i][j]);
+			g_term_c_p[i][j] = NULL;;
+		}
+
+		free(g_term_c_p[i]);
+		g_term_c_p[i] = NULL;
+	}
+
+	free(g_term_c_p);
+	g_term_c_p = NULL;
+	
+	return 0;
+}
+
 int g_term_init()
 {
 	unsigned long long i = 0, j = 0, k = 0;
 
 	for(k = 0; k < LAYER_NUM; k++)
 	{
-		for(i = 0; i < POLY_NUM; i++)
+		//for(i = 0; i < POLY_NUM; i++)
+		for(j = 0; j < (TERM_SIZE * TERM_SIZE); j++)
 		{
-			for(j = 0; j < (TERM_SIZE * TERM_SIZE); j++)
+#if 0			
+			//for(j = 0; j < (TERM_SIZE * TERM_SIZE); j++)
+			for(i = 0; i < POLY_NUM; i++)
 			{
 				g_term_c[k][i][j] = 0xFF;
-				g_term_0_y_c[k][i][j] = 0xFF;
-				g_term_x_0_c[k][i][j] = 0xFF;
+			}
+#endif			
+			g_term_0_y_c[k][j] = 0xFF;
+			g_term_x_0_c[k][j] = 0xFF;
+
+			for(i = 0; i < POLY_NUM; i++)
+			{
+				g_term_c_p[k][i][j] = 0xFF;
 			}
 		}
 	}
@@ -1457,9 +1520,15 @@ int g_term_new_gen(unsigned long long layer_idx, unsigned long long tern_idx, un
 	if((0 == layer_idx)
 		&& (0 != tern_idx))
 	{
+#if 0		
 		memcpy(g_term_c[layer_idx][tern_idx],
 			   g_term_c[layer_idx][tern_idx - 1],
 			   sizeof(unsigned char) * k);
+#else
+		memcpy(g_term_c_p[g_term_phase][tern_idx],
+			   g_term_c_p[g_term_phase][tern_idx - 1],
+			   sizeof(unsigned char) * k);
+#endif
 	}
 
 	for(k = 0; k < (TERM_SIZE * TERM_SIZE); k++)//for every term contain "y"
@@ -1477,7 +1546,11 @@ int g_term_new_gen(unsigned long long layer_idx, unsigned long long tern_idx, un
 			}
 		}
 
+#if 0
 		g_term_c[layer_idx + 1][tern_idx][k] = g_term_c[layer_idx][tern_idx][k];
+#else
+		g_term_c_p[phase_trans(g_term_phase)][tern_idx][k] = g_term_c_p[g_term_phase][tern_idx][k];
+#endif
 
 		if(0 == k)
 		{
@@ -1496,14 +1569,22 @@ int g_term_new_gen(unsigned long long layer_idx, unsigned long long tern_idx, un
 		}
 		
 		if((0 != g_term_y[k])
+#if 0			
 			&& (0xFF != g_term_c[layer_idx][tern_idx][k]))
+#else			
+			&& (0xFF != g_term_c_p[g_term_phase][tern_idx][k]))
+#endif			
 		{
 			DEBUG_NOTICE("*********************\n");
 			DEBUG_NOTICE("g_term_have_y: %d | %d %d | %x\n",
 		    tern_idx,
 		    g_term_x[k],
 		    g_term_y[k],
+#if 0
 		    g_term_c[layer_idx][tern_idx][k]);
+#else
+			g_term_c_p[g_term_phase][tern_idx][k]);
+#endif
 			
 			for(l = 0; l < (g_term_y[k] - 0); l++)//for pow_cal, g*m => tmp
 			{
@@ -1591,11 +1672,19 @@ int g_term_new_gen(unsigned long long layer_idx, unsigned long long tern_idx, un
 							    	g_term_x[s],
 							    	g_term_y[s],
 							    	g_term_c_expand[r],
+#if 0
 							    	g_term_c[layer_idx][tern_idx][k],
+#else
+							    	g_term_c_p[g_term_phase][tern_idx][k],
+#endif
 							    	g_term_c_expand_store[s]);
 							//g_term_c_expand_store[s] = gf_add(g_term_c_expand_store[s], g_term_c_expand[r]);
 							//g_term_c_expand_store[s] = gf_multp(g_term_c_expand_store[s], g_term_c[layer_idx][tern_idx][k]);
+#if 0
 							tmp = gf_multp(g_term_c_expand[r], g_term_c[layer_idx][tern_idx][k]);
+#else
+							tmp = gf_multp(g_term_c_expand[r], g_term_c_p[g_term_phase][tern_idx][k]);
+#endif
 							g_term_c_expand_store[s] = gf_add(g_term_c_expand_store[s], tmp);
 							DEBUG_NOTICE("g_term_expand_store: %d %d | %x\n",
 							    	g_term_x[s],
@@ -1650,8 +1739,11 @@ int g_term_new_gen(unsigned long long layer_idx, unsigned long long tern_idx, un
 			}
 
 			/*clear terms have y*/
+#if 0			
 			g_term_c[layer_idx + 1][tern_idx][k] = 0xFF;
-
+#else
+			g_term_c_p[phase_trans(g_term_phase)][tern_idx][k] = 0xFF;
+#endif
 		}
 	}
 
@@ -1666,16 +1758,27 @@ int g_term_new_gen(unsigned long long layer_idx, unsigned long long tern_idx, un
 			g_term_c[tern_idx][r] = 0xFF;
 		}
 #endif
-		
+#if 0
 		g_term_c[layer_idx + 1][tern_idx][r] = gf_add(g_term_c_expand_store[r], g_term_c[layer_idx + 1][tern_idx][r]);
+#else
+		g_term_c_p[phase_trans(g_term_phase)][tern_idx][r] = gf_add(g_term_c_expand_store[r], g_term_c_p[phase_trans(g_term_phase)][tern_idx][r]);
+#endif
 #if (1 == CFG_DEBUG_NOTICE)
+#if 0
 		if(0xFF != g_term_c[layer_idx + 1][tern_idx][r])
+#else
+		if(0xFF != g_term_c_p[phase_trans(g_term_phase)][tern_idx][r])
+#endif
 		{
 			DEBUG_NOTICE("g_term_update: %d | %d %d | %x\n",
 				    tern_idx,
 				    g_term_x[r],
 				    g_term_y[r],
+#if 0
 				    g_term_c[layer_idx + 1][tern_idx][r]);
+#else
+					g_term_c_p[phase_trans(g_term_phase)][tern_idx][r]);
+#endif
 		}
 #endif		
 	}
@@ -1685,7 +1788,11 @@ int g_term_new_gen(unsigned long long layer_idx, unsigned long long tern_idx, un
 	unsigned char cmn_factor = 0xFF;//deal with x
 	for(r = 0; r < (TERM_SIZE * TERM_SIZE); r++)
 	{
+#if 0		
 		if(0xFF != g_term_c[layer_idx + 1][tern_idx][r])
+#else
+		if(0xFF != g_term_c_p[phase_trans(g_term_phase)][tern_idx][r])
+#endif
 		{
 			if(cmn_factor > g_term_x[r])
 			{
@@ -1698,13 +1805,18 @@ int g_term_new_gen(unsigned long long layer_idx, unsigned long long tern_idx, un
 	{
 		for(r = 0; r < (TERM_SIZE * TERM_SIZE); r++)
 		{
+#if 0
 			if(0xFF != g_term_c[layer_idx + 1][tern_idx][r])
+#else
+			if(0xFF != g_term_c_p[phase_trans(g_term_phase)][tern_idx][r])
+#endif
 			{
 				for(s = 0; s < (TERM_SIZE * TERM_SIZE); s++)
 				{
 					if((g_term_x[s] == (g_term_x[r] - cmn_factor))
 						&& (g_term_y[s] == g_term_y[r]))
 					{
+#if 0
 						g_term_c[layer_idx + 1][tern_idx][s] = g_term_c[layer_idx + 1][tern_idx][r];
 						g_term_c[layer_idx + 1][tern_idx][r] = 0xFF;
 						DEBUG_NOTICE("g_term_update_x: %d | %d %d | %x\n",
@@ -1712,6 +1824,15 @@ int g_term_new_gen(unsigned long long layer_idx, unsigned long long tern_idx, un
 							    g_term_x[s],
 							    g_term_y[s],
 							    g_term_c[layer_idx + 1][tern_idx][s]);
+#else
+						g_term_c_p[phase_trans(g_term_phase)][tern_idx][s] = g_term_c_p[phase_trans(g_term_phase)][tern_idx][r];
+						g_term_c_p[phase_trans(g_term_phase)][tern_idx][r] = 0xFF;
+						DEBUG_NOTICE("g_term_update_x: %d | %d %d | %x\n",
+							    tern_idx,
+							    g_term_x[s],
+							    g_term_y[s],
+							    g_term_c_p[phase_trans(g_term_phase)][tern_idx][s]);
+#endif
 						break;
 					}
 				}
@@ -1761,6 +1882,7 @@ int g_term_new_gen(unsigned long long layer_idx, unsigned long long tern_idx, un
 	DEBUG_NOTICE("*********************\n");
 	for(r = 0; r < (TERM_SIZE * TERM_SIZE); r++)
 	{
+#if 0
 		if(0xFF != g_term_c[layer_idx + 1][tern_idx][r])
 		{
 			DEBUG_INFO("g_term_update_OK: %d | %d %d | %x\n",
@@ -1769,6 +1891,16 @@ int g_term_new_gen(unsigned long long layer_idx, unsigned long long tern_idx, un
 				    g_term_y[r],
 				    g_term_c[layer_idx + 1][tern_idx][r]);
 		}
+#else
+		if(0xFF != g_term_c_p[phase_trans(g_term_phase)][tern_idx][r])
+		{
+			DEBUG_INFO("g_term_update_OK: %d | %d %d | %x\n",
+				    tern_idx,
+				    g_term_x[r],
+				    g_term_y[r],
+				    g_term_c_p[phase_trans(g_term_phase)][tern_idx][r]);
+		}
+#endif
 	}
 #endif
 	
@@ -1822,7 +1954,8 @@ int g_term_0_y_cal(unsigned long long layer_idx, unsigned long long tern_idx)
 	/*clear*/
 	for(j = 0; j < (TERM_SIZE * TERM_SIZE); j++)
 	{
-		g_term_0_y_c[layer_idx][tern_idx][j] = 0xFF;
+		//DEBUG_INFO("layer_idx: %ld, j: %ld\n", layer_idx, j);
+		g_term_0_y_c[layer_idx][j] = 0xFF;
 	}
 
 	for(j = 0; j < (TERM_SIZE * TERM_SIZE); j++)
@@ -1841,27 +1974,39 @@ int g_term_0_y_cal(unsigned long long layer_idx, unsigned long long tern_idx)
 		}
 		
 		if((0 != g_term_x[j])
+#if 0
 			&& (0xFF != g_term_c[layer_idx][tern_idx][j]))
+#else
+			&& (0xFF != g_term_c_p[g_term_phase][tern_idx][j]))
+#endif
 		{
-			g_term_0_y_c[layer_idx][tern_idx][j] = 0xFF;
+			g_term_0_y_c[layer_idx][j] = 0xFF;
 			DEBUG_NOTICE("g_term_set_to_zero: %d | %d %d | %x %x\n",
 				    i,
 				    g_term_x[j],
 				    g_term_y[j],
+#if 0
 				    g_term_c[layer_idx][tern_idx][j],
-				    g_term_0_y_c[layer_idx][tern_idx][j]);
+#else
+					g_term_c_p[g_term_phase][tern_idx][j],
+#endif
+				    g_term_0_y_c[layer_idx][j]);
 		}
 		else
 		{
-			g_term_0_y_c[layer_idx][tern_idx][j] = g_term_c[layer_idx][tern_idx][j];
+#if 0
+			g_term_0_y_c[layer_idx][j] = g_term_c[layer_idx][tern_idx][j];
+#else
+			g_term_0_y_c[layer_idx][j] = g_term_c_p[g_term_phase][tern_idx][j];
+#endif
 #if (1 == CFG_DEBUG_NOTICE)
-			if(0xFF != g_term_0_y_c[layer_idx][tern_idx][j])
+			if(0xFF != g_term_0_y_c[layer_idx][j])
 			{
 				DEBUG_NOTICE("g_term_0_y: %d | %d %d | %x\n",
 						i,
 						g_term_x[j],
 						g_term_y[j],
-						g_term_0_y_c[layer_idx][tern_idx][j]);
+						g_term_0_y_c[layer_idx][j]);
 			}
 #endif
 		}
@@ -1880,15 +2025,19 @@ unsigned char g_term_x_0_cal(unsigned long long layer_idx, unsigned long long te
 	/*clear*/
 	for(j = 0; j < (TERM_SIZE * TERM_SIZE); j++)
 	{
-		g_term_x_0_c[layer_idx][tern_idx][j] = 0xFF;
+		g_term_x_0_c[layer_idx][j] = 0xFF;
 	}
 
 	for(j = 0; j < (TERM_SIZE * TERM_SIZE); j++)
 	{
 		if((0 != g_term_y[j])
+#if 0
 			&& (0xFF != g_term_c[layer_idx][tern_idx][j]))
+#else
+			&& (0xFF != g_term_c_p[g_term_phase][tern_idx][j]))
+#endif
 		{
-			g_term_x_0_c[layer_idx][tern_idx][j] = 0xFF;
+			g_term_x_0_c[layer_idx][j] = 0xFF;
 #if 0			
 			DEBUG_NOTICE("g_term_set_to_zero: %d | %d %d | %x %x\n",
 				    i,
@@ -1900,7 +2049,11 @@ unsigned char g_term_x_0_cal(unsigned long long layer_idx, unsigned long long te
 		}
 		else
 		{
-			g_term_x_0_c[layer_idx][tern_idx][j] = g_term_c[layer_idx][tern_idx][j];
+#if 0
+			g_term_x_0_c[layer_idx][j] = g_term_c[layer_idx][tern_idx][j];
+#else
+			g_term_x_0_c[layer_idx][j] = g_term_c_p[g_term_phase][tern_idx][j];
+#endif
 #if 0
 			if(0xFF != g_term_x_0_c[layer_idx][tern_idx][j])
 			{
@@ -1913,7 +2066,7 @@ unsigned char g_term_x_0_cal(unsigned long long layer_idx, unsigned long long te
 #endif			
 		}
 
-		val = gf_add(val, g_term_x_0_c[layer_idx][tern_idx][j]);
+		val = gf_add(val, g_term_x_0_c[layer_idx][j]);
 	}
 	
 	return val;
@@ -1927,13 +2080,13 @@ int chien_searching_for_g_0_y(unsigned long long layer_idx, unsigned long long t
 	
 	for(k = 0; k < (TERM_SIZE * TERM_SIZE); k++)
 	{
-		if(0xFF != g_term_0_y_c[layer_idx][tern_idx][k])
+		if(0xFF != g_term_0_y_c[layer_idx][k])
 		{
 			tmp = 0xFF;
 			tmp = gf_pow_cal(root_test, g_term_y[k]);
 			//DEBUG_NOTICE("tmp: %x | %x^%d\n", tmp, root_test, g_term_y[k]);
 			//DEBUG_NOTICE("tmp: %x | %x*%x\n", gf_multp(tmp, g_term_0_y_c[tern_idx][k]), tmp, g_term_0_y_c[tern_idx][k]);
-			tmp = gf_multp(tmp, g_term_0_y_c[layer_idx][tern_idx][k]);
+			tmp = gf_multp(tmp, g_term_0_y_c[layer_idx][k]);
 			//DEBUG_NOTICE("tmp_sum: %x | %x+%x\n", gf_add(tmp_sum, tmp), tmp_sum, tmp);
 			tmp_sum = gf_add(tmp_sum, tmp);
 		}
@@ -2298,9 +2451,11 @@ int rr_factorization()
 	for(s = 0; s < MESSAGE_LEN; s++)//layer
 	{
 		DEBUG_INFO("-------------------------------------------\n");
+		//DEBUG_INFO("Layer: %ld, g_term_phase: %ld\n", s, g_term_phase);
 		l = 0;
 		for(r = 0; r < f_root_cnt[s]; r++)//roots per layer
 		{
+			//DEBUG_INFO("Root: %ld, f_root_cnt: %ld\n", r, f_root_cnt[s]);
 			g_term_0_y_cal(s, r);
 
 			for(k = 0; k < GF_FIELD; k++)//test roots
@@ -2325,6 +2480,16 @@ int rr_factorization()
 					}
 				}
 			}
+		}
+
+		/*phase trans.*/
+		if(0 == g_term_phase)
+		{
+			g_term_phase = 1;
+		}
+		else
+		{
+			g_term_phase = 0;
 		}
 	}
 

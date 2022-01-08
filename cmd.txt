@@ -1,0 +1,1 @@
+gcc rnd.c mod.c channel.c gf_cal.c encoding.c as_decoding.c main.c -o as_decoding
