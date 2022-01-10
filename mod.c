@@ -6,6 +6,7 @@
 #include "mod.h"
 
 float **recv_seq;
+float recv_rel[CODEWORD_LEN];
 
 int mod_init()
 {

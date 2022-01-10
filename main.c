@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <string.h>
 #include "debug_info.h"
 #include "gf_cal.h"
 #include "as_decoding.h"
@@ -44,7 +45,20 @@ void main()
 	printf("Please Monitor Times: ");
 	scanf("%ld", &monitor_cnt);
 #endif
+
+	char log_name[255];
+	sprintf(log_name, "n_%d-k_%d-m_%d-sasd_%d-snr_%f_%f_%f-cnt_%ld_%ld.txt",
+					  CODEWORD_LEN,
+					  MESSAGE_LEN,
+					  S_MUL,
+					  SIMPLE_ASD,
+					  eb2n0_start,
+					  eb2n0_step,
+					  eb2n0_stop,
+					  iter_cnt,
+					  monitor_cnt);
 	FILE *frc;
+
 #if 0
 	float **mod_seq;
 	mod_seq = (float**)malloc(sizeof(float*) * symbol_num);
@@ -81,6 +95,7 @@ void main()
 
 			decoding_ok_flag = 0;
 			err_num = 0;
+			memset(recv_rel, 0.0, sizeof(float) * CODEWORD_LEN);
 
 			for(i = 0; i < MESSAGE_LEN; i++)
 			{
@@ -137,7 +152,7 @@ void main()
 			{
 				recv_seq[i][0] = recv_seq[i][0] + awgn_gen(eb2n0);
 				recv_seq[i][1] = recv_seq[i][1] + awgn_gen(eb2n0);
-				DEBUG_IMPOTANT("%f %f\n", recv_seq[i][0], recv_seq[i][1]);
+				DEBUG_NOTICE("%f %f\n", recv_seq[i][0], recv_seq[i][1]);
 			}
 			DEBUG_IMPOTANT("\n");
 
@@ -182,6 +197,8 @@ void main()
 #endif
 
 #if 1
+			chnl_rel_cal();
+
 			mul_assign();
 			
 			re_encoding();
@@ -219,7 +236,7 @@ void main()
 				{
 #if 0					
 					DEBUG_SYS("hamm_distance_cal_err\n");
-					frc = fopen("runing_log.txt", "a+");
+					frc = fopen(log_name, "a+");
 					fprintf(frc, "hamm_distance_cal_err\n");
 					fclose(frc);
 					frc = NULL;
@@ -229,7 +246,7 @@ void main()
 				else
 				{
 					DEBUG_SYS("Prog. Err. for Decoding\n");
-					frc = fopen("runing_log.txt", "a+");
+					frc = fopen(log_name, "a+");
 					fprintf(frc, "Prog. Err. for Decoding\n");
 
 					DEBUG_SYS("Para.: %ld %ld %ld\n",
@@ -285,7 +302,7 @@ void main()
 				DEBUG_SYS("Bit Error: %ld\n", bit_err);
 				DEBUG_SYS("Hamming Error: %ld\n", hamm_err);
 
-				frc = fopen("runing_log.txt", "a+");
+				frc = fopen(log_name, "a+");
 				fprintf(frc, "---------------------\n");
 				fprintf(frc, "Time: %fs\n", runtime);
 				fprintf(frc, "Eb/N0: %f dB\n", eb2n0);
@@ -318,7 +335,7 @@ void main()
 		DEBUG_SYS("Symbol Error: %ld\n", symbol_err);
 		DEBUG_SYS("Bit Error: %ld\n", bit_err);
 		DEBUG_SYS("Hamming Error: %ld\n", hamm_err);
-		frc = fopen("runing_log.txt", "a+");
+		frc = fopen(log_name, "a+");
 		fprintf(frc, "*********************************\n");
 		fprintf(frc, "Time: %fs\n", runtime);
 		fprintf(frc, "Eb/N0: %f dB\n", eb2n0);

@@ -3,7 +3,9 @@
 
 #define RELEX_ORDER				1
 
-#define S_MUL					4
+#define SIMPLE_ASD				1
+
+#define S_MUL					2
 //#define K_M						S_MUL * (S_MUL - 1) * MESSAGE_LEN
 #define LAYER_NUM				(MESSAGE_LEN + 1)
 //#define LAYER_NUM				2
@@ -24,6 +26,7 @@ extern unsigned long long weight_stored;
 extern unsigned long long hamm_distance_debug;
 
 extern int chanl_rel_init();
+extern int chnl_rel_cal();
 extern int mul_assign();
 extern int tao_cal();
 extern unsigned char poly_eva(unsigned char *poly, unsigned char poly_len, unsigned char input_val);

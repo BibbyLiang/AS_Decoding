@@ -142,6 +142,23 @@ int chnl_rel_init()
 	return 0;
 }
 
+int chnl_rel_cal()
+{
+	unsigned long long i = 0, j = 0;
+
+	for(i = 0; i < CODEWORD_LEN; i++)
+	{
+		for(j = 0; j < (GF_Q / BITS_PER_SYMBOL_BPSK); j++)
+		{
+			DEBUG_NOTICE("recv_seq: %f\n", fabs(recv_seq[i * (GF_Q / BITS_PER_SYMBOL_BPSK) + j][0]));
+			recv_rel[i] = recv_rel[i] + fabs(recv_seq[i * (GF_Q / BITS_PER_SYMBOL_BPSK) + j][0]);
+		}
+		DEBUG_NOTICE("recv_rel: %f\n", recv_rel[i]);
+	}
+
+	return 0;
+}
+
 int mul_assign()
 {
 	unsigned long long i = 0, j = 0;
@@ -192,6 +209,23 @@ int mul_assign()
 			if(power_polynomial_table[j][0] == received_polynomial[i])
 			{
 				mul_matrix[j][i] = S_MUL;
+#if 0//for ASD test
+				if(encoded_polynomial[i] != received_polynomial[i])
+				{
+					mul_matrix[j][i] = 1;
+				}
+#endif
+#if (1 == SIMPLE_ASD)//for ASD test, a simple multiplicity assignment strategy
+				if(GF_Q > recv_rel[i])
+				{
+					mul_matrix[j][i] = S_MUL / 2;
+				}
+				if((GF_Q / 2) > recv_rel[i])
+				{
+					mul_matrix[j][i] = S_MUL / 4;
+				}
+#endif
+
 			}
 		}
 	}
@@ -2516,11 +2550,11 @@ int rr_factorization()
 	return 0;
 }
 
-unsigned long long euc_distance_code_cal(unsigned char *a,
-									  			float **b,
-									  			unsigned long long len)
+float euc_distance_code_cal(unsigned char *a,
+								   float **b,
+								   unsigned long long len)
 {
-	unsigned long long euc_distance = 0;
+	float euc_distance = 0;
 
 	unsigned long long i = 0;
 	unsigned long long symbol_num = CODEWORD_LEN * GF_Q * BITS_PER_SYMBOL_BPSK;
@@ -2538,7 +2572,8 @@ unsigned long long euc_distance_code_cal(unsigned char *a,
 
 	for(i = 0; i < symbol_num; i++)
 	{
-		euc_distance = euc_distance + abs(a_mod[i] - b[i]);
+		euc_distance = euc_distance + abs(a_mod[i][0] - b[i][0])
+									+ abs(a_mod[i][1] - b[i][1]);
 	}
 
 	for (i = 0; i < symbol_num; i++)
@@ -2648,7 +2683,7 @@ int check_rr_decoded_result()
 			evaluation_encoding_v2(tmp_decoded_message, tmp_decoded_codeword);
 
 			tmp_code = hamm_distance_code_cal(tmp_decoded_codeword, received_polynomial, CODEWORD_LEN);
-			//tmp_code = euc_distance_code_cal(tmp_decoded_codeword, recv_seq, CODEWORD_LEN);
+			//tmp_code = (unsigned long long)euc_distance_code_cal(tmp_decoded_codeword, recv_seq, CODEWORD_LEN);
 			tmp_bit = hamm_distance_bit_cal(tmp_decoded_codeword, received_polynomial, CODEWORD_LEN);
 			if(tmp_code < hamm_distance_code)
 			{

@@ -4,6 +4,7 @@
 #define BITS_PER_SYMBOL_BPSK	1
 
 extern float **recv_seq;
+extern float recv_rel[CODEWORD_LEN];
 
 extern int mod_init();
 extern int mod_exit();
