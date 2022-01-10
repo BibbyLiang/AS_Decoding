@@ -1,8 +1,41 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "debug_info.h"
 #include "gf_cal.h"
 #include "mod.h"
+
+float **recv_seq;
+
+int mod_init()
+{
+	unsigned long long i = 0;
+	unsigned long long symbol_num = CODEWORD_LEN * GF_Q * BITS_PER_SYMBOL_BPSK;
+
+	recv_seq = (float**)malloc(sizeof(float*) * symbol_num);
+	for (i = 0; i < symbol_num; i++)
+	{
+		recv_seq[i] = (float*)malloc(sizeof(float) * 2);
+	}
+
+	return 0;
+}
+
+int mod_exit()
+{
+	unsigned long long i = 0;
+	unsigned long long symbol_num = CODEWORD_LEN * GF_Q * BITS_PER_SYMBOL_BPSK;
+
+	for (i = 0; i < symbol_num; i++)
+	{
+  		free(recv_seq[i]);
+		recv_seq[i] = NULL;
+  	}
+	free(recv_seq);
+	recv_seq = NULL;
+
+	return 0;
+}
 
 int bpsk_mod(unsigned char *input_seq, 
 				 unsigned int input_len,

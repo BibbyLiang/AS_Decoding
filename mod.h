@@ -3,6 +3,10 @@
 
 #define BITS_PER_SYMBOL_BPSK	1
 
+extern float **recv_seq;
+
+extern int mod_init();
+extern int mod_exit();
 extern int bpsk_mod(unsigned char *input_seq, 
 				 		unsigned int input_len,
 				 		float **output_seq,

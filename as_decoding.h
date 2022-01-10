@@ -3,20 +3,25 @@
 
 #define RELEX_ORDER				1
 
-#define S_MUL					1
+#define S_MUL					4
 //#define K_M						S_MUL * (S_MUL - 1) * MESSAGE_LEN
 #define LAYER_NUM				(MESSAGE_LEN + 1)
 //#define LAYER_NUM				2
 /*approximate and sufficient size allocation*/
 #define TERM_SIZE				((5 * (S_MUL + 1) * CODEWORD_LEN) >> 2)//REAL_SIZE = TERM_SIZE^2
-#define POLY_NUM				TERM_SIZE// notice there may be dangerous! POLY_NUM = ROOT_CNT_LAST_LAYER * GF_FIELD
+#define POLY_NUM				TERM_SIZE * TERM_SIZE// notice there may be dangerous! POLY_NUM = ROOT_CNT_LAST_LAYER * GF_FIELD
 #define ROOT_SIZE				POLY_NUM
-#define LEX_TABLE_EXPAND_SIZE	3 / 2
+#define LEX_TABLE_EXPAND_SIZE	2
 
 extern unsigned char received_polynomial[CODEWORD_LEN];
 extern unsigned char output_polynomial[CODEWORD_LEN];
 extern unsigned char decoded_codeword[CODEWORD_LEN];
 extern unsigned char decoded_message[MESSAGE_LEN];
+
+extern unsigned long long err_num;
+extern unsigned char decoding_ok_flag;
+extern unsigned long long weight_stored;
+extern unsigned long long hamm_distance_debug;
 
 extern int chanl_rel_init();
 extern int mul_assign();

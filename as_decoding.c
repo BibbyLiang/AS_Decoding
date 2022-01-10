@@ -5,6 +5,7 @@
 #include "debug_info.h"
 #include "gf_cal.h"
 #include "encoding.h"
+#include "mod.h"
 #include "as_decoding.h"
 
 unsigned char received_polynomial[CODEWORD_LEN] =
@@ -56,6 +57,11 @@ unsigned char decoded_message[MESSAGE_LEN];
 
 unsigned char ***g_term_c_p;
 unsigned char g_term_phase = 0;
+
+unsigned long long err_num = 0;
+unsigned char decoding_ok_flag = 0;
+unsigned long long weight_stored = 0;
+unsigned long long hamm_distance_debug = 0xFFFF;
 
 void find_max_val(float matrix[][CODEWORD_LEN], unsigned long long col,
 					 unsigned char* m_ptr, unsigned char* n_ptr)
@@ -1325,6 +1331,15 @@ int koetter_interpolation()
 	}
 #endif
 
+	if((S_MUL * (CODEWORD_LEN - err_num)) > weight_pol[sml_poly])
+	{
+		if(0 == decoding_ok_flag)
+		{
+			decoding_ok_flag = 1;
+		}
+		weight_stored = weight_pol[sml_poly];
+	}
+
 	/*free resources*/
 	for (i = 0; i < (d_y_max + 1); i++)
 	{
@@ -2467,7 +2482,12 @@ int rr_factorization()
 					f_root_prev[s][l] = r;
 					f_root_cnt[s + 1] = f_root_cnt[s + 1] + 1;
 
-					DEBUG_INFO("f_root: %d %d | %x\n", s, l, f_root_val[s][l]);
+					DEBUG_INFO("f_root: %d %d | %x | %x | %d\n",
+								s,
+								l,
+								f_root_val[s][l],
+								f_root_prev[s][l],
+								f_root_cnt[s + 1]);
 
 					g_term_new_gen(s, l, f_root_val[s][l]);
 
@@ -2496,41 +2516,107 @@ int rr_factorization()
 	return 0;
 }
 
-unsigned long long hamm_distance_cal(unsigned char *a,
+unsigned long long euc_distance_code_cal(unsigned char *a,
+									  			float **b,
+									  			unsigned long long len)
+{
+	unsigned long long euc_distance = 0;
+
+	unsigned long long i = 0;
+	unsigned long long symbol_num = CODEWORD_LEN * GF_Q * BITS_PER_SYMBOL_BPSK;
+	float **a_mod;
+	a_mod = (float**)malloc(sizeof(float*) * symbol_num);
+	for (i = 0; i < symbol_num; i++)
+	{
+		a_mod[i] = (float*)malloc(sizeof(float) * 2);
+	}
+
+	bpsk_mod(a,
+			 len,
+			 a_mod,
+			 symbol_num);
+
+	for(i = 0; i < symbol_num; i++)
+	{
+		euc_distance = euc_distance + abs(a_mod[i] - b[i]);
+	}
+
+	for (i = 0; i < symbol_num; i++)
+	{
+  		free(a_mod[i]);
+		a_mod[i] = NULL;
+  	}
+	free(a_mod);
+	a_mod = NULL;
+
+	//DEBUG_IMPOTANT("Euc. Distance Test: %d\n", euc_distance);
+
+	return euc_distance;
+}
+
+unsigned long long hamm_distance_code_cal(unsigned char *a,
 									  unsigned char *b,
 									  unsigned long long len)
 {
 	unsigned long long hamm_distance = 0;
+
+	long long i = 0;
+
+	for(i = 0; i < len; i++)
+	{
+		if(a[i] != b[i])
+		{
+			hamm_distance = hamm_distance + 1;
+		}
+	}
+
+	//DEBUG_IMPOTANT("Hamming Distance Test: %d\n", hamm_distance);
+
+	return hamm_distance;
+}
+
+unsigned long long hamm_distance_bit_cal(unsigned char *a,
+									  unsigned char *b,
+									  unsigned long long len)
+{
+	unsigned long long hamm_distance_bit = 0;
 
 	long long i = 0, j = 0;
 	unsigned char tmp_a = 0, tmp_b = 0;
 
 	for(i = 0; i < len; i++)
 	{
-		for(j = 0; j < GF_Q; j++)
+		if(a[i] != b[i])
 		{
-			/*notice these indexes, 0xFF + 0x1 = 0, ..., 0x6 + 0x1 = 7*/
-			tmp_a = (power_polynomial_table[a[i] + 0x1][1] >> j) & 0x1;
-			tmp_b = (power_polynomial_table[b[i] + 0x1][1] >> j) & 0x1;
-
-			if(tmp_a != tmp_b)
+			for(j = 0; j < GF_Q; j++)
 			{
-				hamm_distance = hamm_distance + 1;
+				/*notice these indexes, 0xFF + 0x1 = 0, ..., 0x6 + 0x1 = 7*/
+				tmp_a = (power_polynomial_table[a[i] + 0x1][1] >> j) & 0x1;
+				tmp_b = (power_polynomial_table[b[i] + 0x1][1] >> j) & 0x1;
+
+				if(tmp_a != tmp_b)
+				{
+					hamm_distance_bit = hamm_distance_bit + 1;
+				}
 			}
 		}
 	}
+
 	//DEBUG_IMPOTANT("Hamming Distance Test: %d\n", hamm_distance);
 
-	return hamm_distance;
+	return hamm_distance_bit;
 }
 
 int check_rr_decoded_result()
 {
-	long long r = 0, s = 0;
-	unsigned long long hamm_distance = 0xFFFF, tmp = 0;
+	long long r = 0, s = 0, prev_r = 0;
+	unsigned long long hamm_distance_code = 0xFFFF, hamm_distance_bit = 0xFFFF, tmp_code = 0, tmp_bit = 0;
 	unsigned char tmp_decoded_message[MESSAGE_LEN];
 	unsigned char tmp_decoded_codeword[CODEWORD_LEN];
-	
+	//unsigned long long hamm_distance_debug = 0xFFFF;
+
+	FILE *frc;
+
 	memset(tmp_decoded_message, 0xFF, sizeof(unsigned char) * MESSAGE_LEN);
 	memset(tmp_decoded_codeword, 0xFF, sizeof(unsigned char) * CODEWORD_LEN);
 
@@ -2539,31 +2625,60 @@ int check_rr_decoded_result()
 		if(0xFF == g_term_x_0_cal(MESSAGE_LEN, r))
 		{
 			DEBUG_IMPOTANT("Decoding OK!\n");
+			if(1 == decoding_ok_flag)
+			{
+				decoding_ok_flag = 2;
+			}
 
 			DEBUG_IMPOTANT("Message: %d %d | %x\n", MESSAGE_LEN - 1, r, f_root_val[MESSAGE_LEN - 1][r]);
 
 			memset(tmp_decoded_message, 0xFF, sizeof(unsigned char) * MESSAGE_LEN);
 			tmp_decoded_message[MESSAGE_LEN - 1] = f_root_val[MESSAGE_LEN - 1][r];
 
+			prev_r = r;
 			for(s = MESSAGE_LEN - 2; s >= 0; s--)
 			{
-				DEBUG_IMPOTANT("Message: %d %d | %x\n", s, r, f_root_val[s][f_root_prev[s + 1][r]]);
+				DEBUG_IMPOTANT("Message: %d %d | %x\n", s, prev_r, f_root_val[s][f_root_prev[s + 1][prev_r]]);
 
-				tmp_decoded_message[s] = f_root_val[s][f_root_prev[s + 1][r]];
+				tmp_decoded_message[s] = f_root_val[s][f_root_prev[s + 1][prev_r]];
+
+				prev_r = f_root_prev[s + 1][prev_r];
 			}
 
 			evaluation_encoding_v2(tmp_decoded_message, tmp_decoded_codeword);
 
-			tmp = hamm_distance_cal(tmp_decoded_codeword, received_polynomial, CODEWORD_LEN);
-			if(tmp < hamm_distance)
+			tmp_code = hamm_distance_code_cal(tmp_decoded_codeword, received_polynomial, CODEWORD_LEN);
+			//tmp_code = euc_distance_code_cal(tmp_decoded_codeword, recv_seq, CODEWORD_LEN);
+			tmp_bit = hamm_distance_bit_cal(tmp_decoded_codeword, received_polynomial, CODEWORD_LEN);
+			if(tmp_code < hamm_distance_code)
 			{
-				hamm_distance = tmp;
+				hamm_distance_code = tmp_code;
+				hamm_distance_bit = tmp_bit;
 				memcpy(decoded_codeword, tmp_decoded_codeword, sizeof(unsigned char) * CODEWORD_LEN);
 #if (1 == SYS_ENC)				
 				memcpy(decoded_message, (tmp_decoded_codeword + (CODEWORD_LEN - MESSAGE_LEN)), sizeof(unsigned char) * MESSAGE_LEN);
 #else
 				memcpy(decoded_message, tmp_decoded_message, sizeof(unsigned char) * MESSAGE_LEN);
 #endif
+			}
+			if(tmp_code == hamm_distance_code)
+			{
+				if(tmp_bit < hamm_distance_bit)
+				{
+					hamm_distance_bit = tmp_bit;
+					memcpy(decoded_codeword, tmp_decoded_codeword, sizeof(unsigned char) * CODEWORD_LEN);
+#if (1 == SYS_ENC)				
+					memcpy(decoded_message, (tmp_decoded_codeword + (CODEWORD_LEN - MESSAGE_LEN)), sizeof(unsigned char) * MESSAGE_LEN);
+#else
+					memcpy(decoded_message, tmp_decoded_message, sizeof(unsigned char) * MESSAGE_LEN);
+#endif
+				}
+			}
+
+			if(0 != hamm_distance_debug)
+			{
+				hamm_distance_debug = hamm_distance_code_cal(tmp_decoded_message, message_polynomial, MESSAGE_LEN);		
+				DEBUG_IMPOTANT("Hamming Distance Debug: %ld\n", hamm_distance_debug);
 			}
 		}
 		else
@@ -2573,7 +2688,7 @@ int check_rr_decoded_result()
 	}
 
 #if (1 == CFG_DEBUG_IMPOTANT)
-	if(0xFFFF != hamm_distance)
+	if(0xFFFF != hamm_distance_code)
 	{
 		DEBUG_IMPOTANT("Received Codeword:\n");
 		for(r = 0; r < CODEWORD_LEN; r++)
@@ -2589,7 +2704,7 @@ int check_rr_decoded_result()
 		}
 		DEBUG_IMPOTANT("\n");
 
-		DEBUG_IMPOTANT("Hamming Distance: %d\n", hamm_distance);
+		DEBUG_IMPOTANT("Hamming Distance: %ld %ld\n", hamm_distance_code, hamm_distance_bit);
 
 		DEBUG_IMPOTANT("Decoded Message:\n");
 		for(r = 0; r < MESSAGE_LEN; r++)
