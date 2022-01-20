@@ -15,4 +15,5 @@ extern unsigned char evaluation_encoding_v2(unsigned char *message,
 extern unsigned char systematic_encoding_v2(unsigned char *message,
 									               unsigned char *codeword_output);
 extern int gen_poly_trans();
+extern void encoding2();
 #endif

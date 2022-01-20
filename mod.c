@@ -19,6 +19,8 @@ int mod_init()
 		recv_seq[i] = (float*)malloc(sizeof(float) * 2);
 	}
 
+	DEBUG_SYS("mod_init OK\n");
+
 	return 0;
 }
 

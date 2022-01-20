@@ -379,6 +379,13 @@ unsigned char power_polynomial_table[GF_FIELD][2] =
 };
 #endif
 
+unsigned long long add_cnt = 0;
+unsigned long long mul_cnt = 0;
+unsigned long long div_cnt = 0;
+unsigned long long real_cbm_cnt = 0;
+unsigned long long real_mul_ff_cnt = 0;
+unsigned long long pow_cnt = 0;
+
 unsigned char gf_pow2poly(unsigned char val_in_pow)
 {
 	unsigned char val_in_poly = 0;
@@ -427,6 +434,8 @@ unsigned char gf_location(unsigned char val)
 
 unsigned char gf_add(unsigned char a, unsigned char b)
 {
+	add_cnt++;
+	
 	unsigned char i = 0;
 	unsigned char sum_in_pow = 0;
 	
@@ -444,6 +453,8 @@ unsigned char gf_add(unsigned char a, unsigned char b)
 
 unsigned char gf_multp(unsigned char a, unsigned char b)
 {
+	mul_cnt++;
+	
 	if((0xFF == a) || (0xFF == b))
 	{
 		return 0xFF;
@@ -455,7 +466,7 @@ unsigned char gf_multp(unsigned char a, unsigned char b)
 }
 
 unsigned char gf_div(unsigned char a, unsigned char b)
-{
+{	
 	if(0xFF == a)
 	{
 		return 0xFF;
@@ -465,6 +476,8 @@ unsigned char gf_div(unsigned char a, unsigned char b)
 		DEBUG_NOTICE("div err.\n");
 		return 0xFF;
 	}
+
+	div_cnt++;
 
 	//DEBUG_NOTICE("div: %x %x\n", a, b);
 	unsigned char quotient_in_pow = 0;
@@ -674,6 +687,8 @@ int gf_multp_poly_hw(unsigned char* a, unsigned char len_a,
 
 unsigned long long real_combine(unsigned long long n, unsigned long long k)
 {
+	real_cbm_cnt++;
+	
 	unsigned long long combine_num = 0;
 
 #if 0//it is useless when values are too large
@@ -712,6 +727,8 @@ unsigned long long real_combine(unsigned long long n, unsigned long long k)
 
 unsigned char gf_real_mutp_ff(unsigned long long n, unsigned char ff)
 {
+	real_mul_ff_cnt++;
+	
 	unsigned char val = 0xFF;
 
 	if(0 != (n % 2))
@@ -728,6 +745,8 @@ unsigned char gf_real_mutp_ff(unsigned long long n, unsigned char ff)
 
 unsigned char gf_pow_cal(unsigned char ff, unsigned long long n)
 {
+	pow_cnt++;
+	
 	unsigned char val = 0xFF;
 	if(0xFF == ff)
 	{

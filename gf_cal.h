@@ -1,7 +1,7 @@
 #ifndef GF_CAL_H
 #define GF_CAL_H
 
-#define GF_Q			 3
+#define GF_Q			 6
 
 #if (3 == GF_Q)
 #define GF_FIELD        8
@@ -22,6 +22,13 @@
 #define CODEWORD_LEN    (GF_FIELD - 1)   
 
 extern unsigned char power_polynomial_table[GF_FIELD][2];
+
+extern unsigned long long add_cnt;
+extern unsigned long long mul_cnt;
+extern unsigned long long div_cnt;
+extern unsigned long long real_cbm_cnt;
+extern unsigned long long real_mul_ff_cnt;
+extern unsigned long long pow_cnt;
 
 extern unsigned char gf_pow2poly(unsigned char val_in_pow);
 extern unsigned char gf_poly2pow(unsigned char val_in_poly);

@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
+#include <time.h>
 #include "debug_info.h"
 #include "gf_cal.h"
 #include "encoding.h"
@@ -46,14 +47,18 @@ unsigned char phi[CODEWORD_LEN];
 //unsigned char g_term_c[LAYER_NUM][POLY_NUM][TERM_SIZE * TERM_SIZE];
 unsigned long long g_term_x[TERM_SIZE * TERM_SIZE];
 unsigned long long g_term_y[TERM_SIZE * TERM_SIZE];
+#if (0 == RECUR_RR)
 unsigned char g_term_0_y_c[LAYER_NUM][TERM_SIZE * TERM_SIZE];
 unsigned char g_term_x_0_c[LAYER_NUM][TERM_SIZE * TERM_SIZE];
 unsigned char f_root_val[ROOT_SIZE][ROOT_SIZE];
 unsigned char f_root_prev[ROOT_SIZE][ROOT_SIZE];
 unsigned long long f_root_cnt[ROOT_SIZE + 1];//used for next layer
+#endif
 unsigned long long sml_poly = 0xFF;
 unsigned char decoded_codeword[CODEWORD_LEN];
 unsigned char decoded_message[MESSAGE_LEN];
+unsigned char tmp_message[MESSAGE_LEN];
+unsigned long long best_hamm_distance_code, best_hamm_distance_bit;
 
 unsigned char ***g_term_c_p;
 unsigned char g_term_phase = 0;
@@ -62,6 +67,7 @@ unsigned long long err_num = 0;
 unsigned char decoding_ok_flag = 0;
 unsigned long long weight_stored = 0;
 unsigned long long hamm_distance_debug = 0xFFFF;
+unsigned long long rr_err = 0;
 
 void find_max_val(float matrix[][CODEWORD_LEN], unsigned long long col,
 					 unsigned char* m_ptr, unsigned char* n_ptr)
@@ -91,14 +97,19 @@ int chnl_rel_init()
 {
 	unsigned long long i = 0, j = 0;
 
-	for(i = 0; i < CODEWORD_LEN + 1; i++)
+	for(i = 0; i < (CODEWORD_LEN + 1); i++)
 	{
+#if 0		
 		for(j = 0; j < CODEWORD_LEN; j++)
 		{
 			chnl_rel_matrix[i][j] = 0;
 		}
+#else
+		memset(chnl_rel_matrix[i], 0, sizeof(float) * CODEWORD_LEN);
+#endif
 	}
 
+#if 0
 	chnl_rel_matrix[0][1] = 0.12;
 	chnl_rel_matrix[0][2] = 0.01;
 	chnl_rel_matrix[1][0] = 0.02;
@@ -130,13 +141,70 @@ int chnl_rel_init()
 	chnl_rel_matrix[7][0] = 0.32;
 	chnl_rel_matrix[7][2] = 0.21;
 	chnl_rel_matrix[7][6] = 0.51;
+#else
+	for(i = 0; i < (CODEWORD_LEN + 1); i++)
+	{
+		for(j = 0; j < CODEWORD_LEN; j++)
+		{
+			//if(0xFF == error_polynomial[j])
+			//if(encoded_polynomial[j] == received_polynomial[j])//for simulation test
+			if((j == 48)
+				|| (j == 10)
+				|| (j == 28)
+				|| (j == 27)
+				|| (j == 19)
+				|| (j == 9)
+				|| (j == 62)
+				|| (j == 61)
+				|| (j == 60)
+				|| (j == 53)
+				|| (j == 22)
+				|| (j == 24)
+				|| (j == 16)
+				|| (j == 30)
+				|| (j == 15)
+				|| (j == 23)
+				|| (j == 11)
+				|| (j == 29)
+				|| (j == 33)
+				|| (j == 45)
+				|| (j == 36))
+			{
+				if(0xFF == received_polynomial[j])
+				{
+					chnl_rel_matrix[0][j] = 1;
+				}
+				else
+				{
+					chnl_rel_matrix[received_polynomial[j] + 1][j] = 1;
+				}
+			}
+			else
+			{
+				chnl_rel_matrix[1][j] = 0.33;
+				chnl_rel_matrix[3][j] = 0.33;
+				chnl_rel_matrix[5][j] = 0.34;
+			}
+		}
+	}
+#endif
+
+#if 0//test
+	chnl_rel_matrix[1][1] = 0;
+	chnl_rel_matrix[3][1] = 0;
+	chnl_rel_matrix[5][1] = 1;
+#endif
 
 	for(i = 0; i < CODEWORD_LEN + 1; i++)
 	{
+#if 0		
 		for(j = 0; j < CODEWORD_LEN; j++)
 		{
 			chnl_rel_matrix_tmp[i][j] = chnl_rel_matrix[i][j];
 		}
+#else
+		memcpy(chnl_rel_matrix_tmp[i], chnl_rel_matrix[i], sizeof(float) * CODEWORD_LEN);
+#endif
 	}
 
 	return 0;
@@ -162,12 +230,15 @@ int chnl_rel_cal()
 int mul_assign()
 {
 	unsigned long long i = 0, j = 0;
+
+#if (1 == RE_ENCODING)
+	chnl_rel_init();
+#endif
+	
 #if 0	
 	unsigned long long s = 0;
 	unsigned char *m_ptr = (unsigned char*)malloc(sizeof(unsigned char));
 	unsigned char *n_ptr = (unsigned char*)malloc(sizeof(unsigned char));
-
-	chnl_rel_init();
 
 	for(i = 0; i < CODEWORD_LEN + 1; i++)
 	{
@@ -252,23 +323,55 @@ unsigned char syndrome_cal(unsigned char *recv, unsigned char *synd,
 	unsigned long long i = 0, j = 0;
 	unsigned char tmp = 0xFF, tmp_sum = 0xFF;
 
-	for(i = 0; i < cw_len - msg_len; i++)
+	for(i = 0; i < (cw_len - msg_len); i++)
 	{
 		tmp = 0xFF;
 		tmp_sum = 0xFF;
 		for(j = 0; j < cw_len; j++)
 		{
-			tmp = gf_multp(recv[j], (i + 1) * j);
+			tmp = gf_multp(recv[j], ((i + 1) * j) % (GF_FIELD - 1));
 			tmp_sum = gf_add(tmp, tmp_sum);
-			//DEBUG_INFO("%x %x\n", tmp, tmp_sum);
+#if 0			
+			if(0xFF == tmp_sum)
+			{
+				DEBUG_INFO("s_tmp: %d %d\n", recv[j], power_polynomial_table[0][1]);
+			}
+			else
+			{
+				DEBUG_INFO("s_tmp: %d %d %d %d %d %d\n",
+						   i,
+						   j,
+						   recv[j],
+						   power_polynomial_table[tmp + 1][1],
+					       power_polynomial_table[recv[j] + 1][1],
+					       power_polynomial_table[tmp_sum + 1][1]);
+			}
+#endif			
 		}
 		synd[i] = tmp_sum;
+#if 0		
+		if(0xFF == synd[i])
+		{
+			DEBUG_INFO("%d %d\n", i, power_polynomial_table[0][1]);
+		}
+		else
+		{
+			DEBUG_INFO("%d %d\n", i, power_polynomial_table[synd[i] + 1][1]);
+		}
+#endif		
 	}
 #if (1 == CFG_DEBUG_INFO)	
 	DEBUG_INFO("Syndrome Polynomial:\n");
 	for(i = 0; i < cw_len - msg_len; i++)
 	{
-		DEBUG_INFO("%x ", synd[i]);
+		if(0xFF == synd[i])
+		{
+			DEBUG_INFO("%d %d\n", i, power_polynomial_table[0][1]);
+		}
+		else
+		{
+			DEBUG_INFO("%d %d\n", i, power_polynomial_table[synd[i] + 1][1]);
+		}
 	}
 	DEBUG_INFO("\n");
 #endif	
@@ -276,29 +379,35 @@ unsigned char syndrome_cal(unsigned char *recv, unsigned char *synd,
 
 int rel_group()
 {
-	unsigned long long i = 0, j = 0;
+	long long i = 0, j = 0;
 
 	float rel_thrd = 0.7;
 	unsigned long long rel_cnt = 0, rel_flag = 0;
 
-	while(MESSAGE_LEN != rel_cnt)
+	while(MESSAGE_LEN > rel_cnt)
 	{
-		rel_cnt = 0;
 		rel_flag = 0;
 		memset(rel_group_seq, 0, sizeof(unsigned char) * MESSAGE_LEN);
 		memset(unrel_group_seq, 0, sizeof(unsigned char) * (CODEWORD_LEN - MESSAGE_LEN));
 	
 		for(j = 0; j < CODEWORD_LEN; j++)
+		//for(j = (CODEWORD_LEN - 1); j >= 0; j--)
 		{
-			for(i = 0; i < CODEWORD_LEN + 1; i++)
+			rel_flag = 0;
+			for(i = 0; i < (CODEWORD_LEN + 1); i++)
 			{
 				if(rel_thrd < chnl_rel_matrix[i][j])
 				{
 					rel_flag = 1;
-					//DEBUG_NOTICE("rel_val: %d %d %f %f\n", i, j, rel_thrd, chnl_rel_matrix[i][j]);
+					DEBUG_NOTICE("rel_val: %d %d %f %f %d\n", i, j, rel_thrd, chnl_rel_matrix[i][j], rel_cnt);
 					break;
 				}
+				else
+				{
+					//DEBUG_NOTICE("unrel_val: %d %d %f %f %d\n", i, j, rel_thrd, chnl_rel_matrix[i][j], rel_cnt);
+				}
 			}
+
 			if(1 == rel_flag)
 			{
 				if(MESSAGE_LEN > rel_cnt)
@@ -307,6 +416,7 @@ int rel_group()
 				}
 				rel_cnt = rel_cnt + 1;
 			}
+#if 0			
 			else
 			{
 				if(MESSAGE_LEN >= rel_cnt)
@@ -314,7 +424,7 @@ int rel_group()
 					unrel_group_seq[j - rel_cnt] = j;
 				}
 			}
-			rel_flag = 0;
+#endif			
 		}
 
 		//DEBUG_NOTICE("rel_group: %f %d\n", rel_thrd, rel_cnt);
@@ -326,6 +436,25 @@ int rel_group()
 		else
 		{
 			rel_thrd = rel_thrd - 0.05;
+		}
+	}
+
+	rel_cnt = 0;
+	for(j = 0; j < CODEWORD_LEN; j++)
+	{
+		rel_flag = 0;
+		for(i = 0; i < MESSAGE_LEN; i++)
+		{
+			if(j == rel_group_seq[i])
+			{
+				rel_flag = 1;
+				break;
+			}
+		}
+		if(0 == rel_flag)
+		{
+			unrel_group_seq[rel_cnt] = j;
+			rel_cnt = rel_cnt + 1;
 		}
 	}
 
@@ -390,7 +519,7 @@ int tao_cal()
 	DEBUG_INFO("tao: ");
 	for(j = 0; j < (CODEWORD_LEN - MESSAGE_LEN + 1); j++)
 	{
-		DEBUG_INFO("%x ", reg[j]);
+		DEBUG_INFO("%d ", reg[j]);
 	}
 	DEBUG_INFO("\n");
 #endif
@@ -416,7 +545,7 @@ int sigma_cal()
 	DEBUG_NOTICE("sigma: ");
 	for(i = 0; i < (((CODEWORD_LEN - MESSAGE_LEN) + (CODEWORD_LEN - MESSAGE_LEN + 1) - 1) - (CODEWORD_LEN - MESSAGE_LEN)); i++)
 	{
-		DEBUG_NOTICE("%x ", sigma[i]);
+		DEBUG_NOTICE("%d ", sigma[i]);
 	}
 	DEBUG_NOTICE("\n");
 #endif
@@ -427,7 +556,7 @@ int sigma_cal()
 	DEBUG_NOTICE("omega: ");
 	for(i = 0; i < (CODEWORD_LEN - MESSAGE_LEN); i++)
 	{
-		DEBUG_NOTICE("%x ", omega[i]);
+		DEBUG_NOTICE("%d ", omega[i]);
 	}
 	DEBUG_NOTICE("\n");
 #endif
@@ -435,7 +564,7 @@ int sigma_cal()
 	return 0;
 }
 
-unsigned char poly_eva(unsigned char *poly, unsigned char poly_len, unsigned char input_val)
+unsigned char poly_eva(unsigned char *poly, unsigned long long poly_len, unsigned char input_val)
 {
 	unsigned long long i = 0;
 	unsigned char poly_val = 0xFF, tmp_product = 0;
@@ -456,31 +585,11 @@ int phi_cal()
 	unsigned char find_flag = 0;
 	unsigned char tao_dev[(CODEWORD_LEN - MESSAGE_LEN + 1) - 1]; 
 	unsigned char tmp = 0xFF, locator = 0xFF;
-#if 0
-	unrel_group_seq[0] = 0;
-	unrel_group_seq[1] = 3;
-	unrel_group_seq[2] = 5;
-	unrel_group_seq[3] = 1;
-	//tao[0] = 0;
-	//tao[1] = 5;
-	//tao[2] = 4;
-	//tao[3] = 0;
-	//tao[4] = 4;
-	received_polynomial[0] = 0xFF;
-	received_polynomial[1] = 0xFF;
-	received_polynomial[2] = 0;
-	received_polynomial[3] = 0xFF;
-	received_polynomial[4] = 0;
-	received_polynomial[5] = 0xFF;
-	received_polynomial[6] = 0xFF;
-	//omega[0] = 3;
-	//omega[1] = 2;
-	//omega[2] = 6;
-	//omega[3] = 5;
-#endif
+
 	memset(phi, 0xFF, sizeof(unsigned char) * CODEWORD_LEN);
 	memcpy(erasure_polynomial, received_polynomial, sizeof(unsigned char) * CODEWORD_LEN);
-	for(i = 0; i < (CODEWORD_LEN - MESSAGE_LEN); i++)
+	//for(i = 0; i < (CODEWORD_LEN - MESSAGE_LEN); i++)
+	for(i = 0; i < CODEWORD_LEN; i++)
 	{
 		for(k = 0; k < (CODEWORD_LEN - MESSAGE_LEN); k++)
 		{
@@ -499,11 +608,22 @@ int phi_cal()
 		{
 			erasure_polynomial[i] = 0xFF;
 		}
+		if(0xFF == erasure_polynomial[i])
+		{
+			DEBUG_NOTICE("erasure_polynomial: %d %x %d\n", i, received_polynomial[i], power_polynomial_table[0][1]);
+		}
+		else
+		{
+			DEBUG_NOTICE("erasure_polynomial: %d %x %d\n", i, received_polynomial[i], power_polynomial_table[erasure_polynomial[i] + 1][1]);
+		}
 	}
 	find_flag = 0;
-	
-	syndrome_cal(erasure_polynomial, syndrome,
-				  CODEWORD_LEN, MESSAGE_LEN);
+
+	memset(syndrome, 0xFF, sizeof(unsigned char) * (CODEWORD_LEN - MESSAGE_LEN));
+	syndrome_cal(erasure_polynomial,
+				  syndrome,
+				  CODEWORD_LEN,
+				  MESSAGE_LEN);
 	tao_cal();
 	sigma_cal();
 
@@ -523,7 +643,7 @@ int phi_cal()
 	DEBUG_NOTICE("tao_dev: ");
 	for(i = 0; i < (CODEWORD_LEN - MESSAGE_LEN); i++)
 	{
-		DEBUG_NOTICE("%x ", tao_dev[i]);
+		DEBUG_NOTICE("%d ", tao_dev[i]);
 	}
 	DEBUG_NOTICE("\n");
 #endif
@@ -551,7 +671,6 @@ int phi_cal()
 			tmp = poly_eva(omega, CODEWORD_LEN - MESSAGE_LEN, locator);
 			//DEBUG_NOTICE("%x ", tmp);
 			//tmp = gf_div(tmp, (locator * (CODEWORD_LEN - MESSAGE_LEN + 1)) % (GF_FIELD - 1));
-			//DEBUG_NOTICE("%x ", tmp);
 			tmp = gf_div(tmp, poly_eva(tao_dev, CODEWORD_LEN - MESSAGE_LEN, locator));
 			//DEBUG_NOTICE("%x ", tmp);
 			//phi[i] = gf_add(tmp, received_polynomial[i]);
@@ -565,10 +684,17 @@ int phi_cal()
 	}
 
 #if (1 == CFG_DEBUG_INFO)
-	DEBUG_INFO("phi: ");
+	DEBUG_INFO("phi:\n");
 	for(i = 0; i < CODEWORD_LEN; i++)
 	{
-		DEBUG_INFO("%x ", phi[i]);
+		if(0xFF == phi[i])
+		{
+			DEBUG_INFO("%x %d\n", phi[i], power_polynomial_table[0][1]);
+		}
+		else
+		{
+			DEBUG_INFO("%x %d\n", phi[i], power_polynomial_table[phi[i] + 1][1]);
+		}
 	}
 	DEBUG_INFO("\n");
 #if 0
@@ -623,6 +749,167 @@ unsigned char coordinate_trans(unsigned char locator, unsigned char r, unsigned 
 	return coordinate;
 }
 
+int erasure_decoding(unsigned char *r_seq)
+{
+	unsigned long long i = 0, j = 0, k = 0, l = 0;
+	unsigned char find_flag = 0;
+	memset(syndrome, 0xFF, sizeof(unsigned char) * (CODEWORD_LEN - MESSAGE_LEN));
+
+	//syndrome_cal(r_seq, syndrome, CODEWORD_LEN, MESSAGE_LEN);
+
+	unsigned char tao_dev[(CODEWORD_LEN - MESSAGE_LEN + 1) - 1]; 
+	unsigned char tmp = 0xFF, locator = 0xFF;
+	memset(phi, 0xFF, sizeof(unsigned char) * CODEWORD_LEN);
+	memcpy(erasure_polynomial, r_seq, sizeof(unsigned char) * CODEWORD_LEN);
+	//for(i = 0; i < (CODEWORD_LEN - MESSAGE_LEN); i++)
+	for(i = 0; i < CODEWORD_LEN; i++)
+	{
+		for(k = 0; k < (CODEWORD_LEN - MESSAGE_LEN); k++)
+		{
+			if(unrel_group_seq[k] == i)
+			{
+				find_flag = 1;
+				break;
+			}
+			else
+			{
+				find_flag = 0;
+			}
+		}
+
+		if(1 == find_flag)
+		{
+			erasure_polynomial[i] = 0xFF;
+			DEBUG_NOTICE("erasure_polynomial: %d %x %x\n", i, r_seq[i], erasure_polynomial[i]);
+		}
+	}
+	find_flag = 0;
+	
+	syndrome_cal(erasure_polynomial, syndrome,
+				  CODEWORD_LEN, MESSAGE_LEN);
+	tao_cal();
+	sigma_cal();
+
+	for(i = 0; i < (CODEWORD_LEN - MESSAGE_LEN); i++)
+	{
+		if(0 != (i % 2))
+		{
+			tao_dev[i] = 0xFF;
+		}
+		else
+		{
+			tao_dev[i] = tao[i + 1];
+		}
+	}
+
+#if (1 == CFG_DEBUG_NOTICE)	
+	DEBUG_NOTICE("tao_dev: ");
+	for(i = 0; i < (CODEWORD_LEN - MESSAGE_LEN); i++)
+	{
+		DEBUG_NOTICE("%x ", tao_dev[i]);
+	}
+	DEBUG_NOTICE("\n");
+#endif
+
+	for(i = 0; i < CODEWORD_LEN; i++)
+	{
+		for(k = 0; k < (CODEWORD_LEN - MESSAGE_LEN); k++)
+		{
+			if(unrel_group_seq[k] == i)
+			{
+				find_flag = 1;
+				break;
+			}
+			else
+			{
+				find_flag = 0;
+			}
+		}
+
+		if(1 == find_flag)
+		{
+			locator = power_polynomial_table[i + 1][0];
+			locator = ((GF_FIELD - 1) - locator) % (GF_FIELD - 1);
+			DEBUG_NOTICE("%x: %x\n", i, locator);
+			tmp = poly_eva(omega, CODEWORD_LEN - MESSAGE_LEN, locator);
+			DEBUG_NOTICE("%x ", tmp);
+			//tmp = gf_div(tmp, (locator * (CODEWORD_LEN - MESSAGE_LEN + 1)) % (GF_FIELD - 1));
+			DEBUG_NOTICE("%x ", tmp);
+			tmp = gf_div(tmp, poly_eva(tao_dev, CODEWORD_LEN - MESSAGE_LEN, locator));
+			DEBUG_NOTICE("%x ", tmp);
+			//phi[i] = gf_add(tmp, received_polynomial[i]);
+			phi[i] = tmp;
+			DEBUG_NOTICE("\n");
+		}
+		else
+		{
+			phi[i] = r_seq[i];
+		}
+	}
+
+#if (1 == CFG_DEBUG_INFO)
+	DEBUG_INFO("recover_erasure_codeword: ");
+	for(i = 0; i < CODEWORD_LEN; i++)
+	{
+		DEBUG_INFO("%x ", phi[i]);
+	}
+	DEBUG_INFO("\n");
+#if 0
+	DEBUG_INFO("code_val: ");
+	for(i = 0; i < (GF_FIELD - 1); i++)
+	{
+		DEBUG_INFO("%x ", poly_eva(phi, (CODEWORD_LEN), power_polynomial_table[i + 1][0]));
+	}
+	DEBUG_INFO("\n");
+#endif	
+#endif
+
+	return 0;
+}
+
+int recover_codeword()
+{
+	DEBUG_NOTICE("recover\n");
+	unsigned long long i = 0, j = 0;
+	unsigned long long cnt = 0;
+
+	for(i = 0; i < CODEWORD_LEN; i++)
+	{
+		for(j = 0; j < MESSAGE_LEN; j++)
+		{
+			if(i == rel_group_seq[j])
+			{
+				decoded_codeword[i] = decoded_message[cnt];
+				cnt = cnt + 1;
+			}
+		}
+		if(MESSAGE_LEN <= cnt)
+		{
+			break;
+		}
+	}
+
+	for(i = 0; i < CODEWORD_LEN; i++)
+	{
+		decoded_codeword[i] = gf_add(decoded_codeword[i], received_polynomial[i]);
+		for(j = 0; j < MESSAGE_LEN; j++)
+		{
+			if(i == unrel_group_seq[j])
+			{
+				decoded_codeword[i] = 0xFF;
+			}
+		}
+		DEBUG_NOTICE("recover_decoded_codeword: %x\n", decoded_codeword[i]);
+	}
+
+	erasure_decoding(decoded_codeword);
+
+	memcpy(decoded_codeword, phi, sizeof(unsigned char) * CODEWORD_LEN);
+	memcpy(decoded_message, decoded_codeword + (CODEWORD_LEN - MESSAGE_LEN), sizeof(unsigned char) * CODEWORD_LEN);
+
+	return 0;
+}
+
 int re_encoding()
 {
 	unsigned long long i = 0, j = 0, k = 0, l = 0;
@@ -632,7 +919,7 @@ int re_encoding()
 
 	syndrome_cal(received_polynomial, syndrome,
 				  CODEWORD_LEN, MESSAGE_LEN);
-#if 0//use re-encoding
+#if (1 == RE_ENCODING)//use re-encoding
 #if 0
 	DEBUG_INFO("syn_val: ");
 	for(i = 0; i < (GF_FIELD - 1); i++)
@@ -655,6 +942,7 @@ int re_encoding()
 #endif
 
 	phi_cal();
+	//erasure_decoding(erasure_polynomial);
 #if 0
 	for(i = 0; i < (CODEWORD_LEN + 1); i++)
 	{
@@ -707,6 +995,13 @@ int re_encoding()
 			else
 			{
 				beta_matrix[i][j] = coordinate_trans(power_polynomial_table[j + 1][0], power_polynomial_table[i][0], phi[j]);
+				DEBUG_NOTICE("beta_matrix: %d %d %x %x %x %x\n",
+					         i,
+					         j,
+					         power_polynomial_table[j + 1][0],
+					         power_polynomial_table[i][0],
+					         phi[j],
+					         beta_matrix[i][j]);
 			}
 		}
 	}
@@ -1419,7 +1714,7 @@ int g_term_malloc()
 			g_term_c_p[i][j] = (unsigned char*)malloc(sizeof(unsigned char) * (TERM_SIZE * TERM_SIZE));
 		}
   	}
-	DEBUG_SYS("malloc g_term OK\n", i);
+	DEBUG_SYS("malloc g_term OK\n");
 	
 	return 0;
 }
@@ -1434,6 +1729,7 @@ int g_term_destroy()
 		{
 			free(g_term_c_p[i][j]);
 			g_term_c_p[i][j] = NULL;;
+			//DEBUG_NOTICE("free: %ld %ld\n", i, j);
 		}
 
 		free(g_term_c_p[i]);
@@ -1450,9 +1746,14 @@ int g_term_init()
 {
 	unsigned long long i = 0, j = 0, k = 0;
 
+	clock_t start, stop;
+	float runtime;
+	start = clock();
+	
 	for(k = 0; k < LAYER_NUM; k++)
 	{
 		//for(i = 0; i < POLY_NUM; i++)
+#if 0		
 		for(j = 0; j < (TERM_SIZE * TERM_SIZE); j++)
 		{
 #if 0			
@@ -1464,14 +1765,27 @@ int g_term_init()
 #endif			
 			g_term_0_y_c[k][j] = 0xFF;
 			g_term_x_0_c[k][j] = 0xFF;
-
+#if 0
 			for(i = 0; i < POLY_NUM; i++)
 			{
 				g_term_c_p[k][i][j] = 0xFF;
 			}
+#endif
+		}
+#endif
+
+#if (0 == RECUR_RR)
+		memset(g_term_0_y_c[k], 0xFF, sizeof(unsigned char) * (TERM_SIZE * TERM_SIZE));
+		memset(g_term_x_0_c[k], 0xFF, sizeof(unsigned char) * (TERM_SIZE * TERM_SIZE));
+#endif
+		for(i = 0; i < POLY_NUM; i++)
+		{
+			memset(g_term_c_p[k][i], 0xFF, sizeof(unsigned char) * (TERM_SIZE * TERM_SIZE));
 		}
 	}
-
+	stop = clock();
+	runtime = (stop - start) / 1000.0000;
+	//DEBUG_SYS("Time21: %fs\n", runtime);
 	k = 0;
 	for(i = 0; i < TERM_SIZE; i++)
 	{
@@ -1483,20 +1797,32 @@ int g_term_init()
 		}
 	}
 
+	hamm_distance_debug = 0xFFFF;
+	
+	stop = clock();
+	runtime = (stop - start) / 1000.0000;
+	//DEBUG_SYS("Time22: %fs\n", runtime);
+	//DEBUG_SYS("g_term_init OK\n");
 	return 0;
 }
 
+#if (0 == RECUR_RR)
 int f_root_init()
 {
 	unsigned long long i = 0, j = 0;
 
 	for(i = 0; i < ROOT_SIZE; i++)
 	{
+#if 0		
 		for(j = 0; j < ROOT_SIZE; j++)
 		{
 			f_root_val[i][j] = 0xFF;
 			f_root_prev[i][j] = 0xFF;
 		}
+#else
+		memset(f_root_val[i], 0xFF, sizeof(unsigned char) * ROOT_SIZE);
+		memset(f_root_prev[i], 0xFF, sizeof(unsigned char) * ROOT_SIZE);
+#endif
 		f_root_cnt[i + 1] = 0;
 	}
 	f_root_cnt[0] = 1;
@@ -2001,11 +2327,15 @@ int g_term_0_y_cal(unsigned long long layer_idx, unsigned long long tern_idx)
 	}
 #else
 	/*clear*/
+#if 0
 	for(j = 0; j < (TERM_SIZE * TERM_SIZE); j++)
 	{
 		//DEBUG_INFO("layer_idx: %ld, j: %ld\n", layer_idx, j);
 		g_term_0_y_c[layer_idx][j] = 0xFF;
 	}
+#else
+	memset(g_term_0_y_c[layer_idx], 0xFF, sizeof(unsigned char) * (TERM_SIZE * TERM_SIZE));
+#endif
 
 	for(j = 0; j < (TERM_SIZE * TERM_SIZE); j++)
 	{
@@ -2072,10 +2402,14 @@ unsigned char g_term_x_0_cal(unsigned long long layer_idx, unsigned long long te
 	unsigned long long i = 0, j = 0;
 
 	/*clear*/
+#if 0	
 	for(j = 0; j < (TERM_SIZE * TERM_SIZE); j++)
 	{
 		g_term_x_0_c[layer_idx][j] = 0xFF;
 	}
+#else
+	memset(g_term_x_0_c[layer_idx], 0xFF, sizeof(unsigned char) * (TERM_SIZE * TERM_SIZE));
+#endif
 
 	for(j = 0; j < (TERM_SIZE * TERM_SIZE); j++)
 	{
@@ -2154,342 +2488,12 @@ int chien_searching_for_g_0_y(unsigned long long layer_idx, unsigned long long t
 	return is_root;
 }
 
-#if 0
-int test_factorization_init()
-{
-	int k = 0;
-
-	for(k = 0; k < (TERM_SIZE * TERM_SIZE); k++)
-	{
-		g_term_c[0][0][k] = 0xFF;
-
-		if((0 == g_term_x[k])
-			&& (7 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 2;
-		}
-
-		if((3 == g_term_x[k])
-			&& (6 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 5;
-		}
-		if((2 == g_term_x[k])
-			&& (6 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 1;
-		}
-		if((1 == g_term_x[k])
-			&& (6 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 6;
-		}
-		if((0 == g_term_x[k])
-			&& (6 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 6;
-		}
-
-		if((5 == g_term_x[k])
-			&& (5 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 1;
-		}
-		if((4 == g_term_x[k])
-			&& (5 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 6;
-		}
-		if((3 == g_term_x[k])
-			&& (5 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 4;
-		}
-		if((2 == g_term_x[k])
-			&& (5 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 4;
-		}
-		if((0 == g_term_x[k])
-			&& (5 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 2;
-		}
-
-		if((7 == g_term_x[k])
-			&& (4 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 0;
-		}
-		if((6 == g_term_x[k])
-			&& (4 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 3;
-		}
-		if((5 == g_term_x[k])
-			&& (4 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 1;
-		}
-		if((4 == g_term_x[k])
-			&& (4 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 0;
-		}
-		if((3 == g_term_x[k])
-			&& (4 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 2;
-		}
-		if((1 == g_term_x[k])
-			&& (4 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 5;
-		}
-		if((0 == g_term_x[k])
-			&& (4 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 2;
-		}
-
-		if((9 == g_term_x[k])
-			&& (3 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 1;
-		}
-		if((8 == g_term_x[k])
-			&& (3 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 6;
-		}
-		if((7 == g_term_x[k])
-			&& (3 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 6;
-		}
-		if((6 == g_term_x[k])
-			&& (3 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 4;
-		}
-		if((5 == g_term_x[k])
-			&& (3 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 6;
-		}
-		if((4 == g_term_x[k])
-			&& (3 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 2;
-		}
-		if((3 == g_term_x[k])
-			&& (3 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 3;
-		}
-		if((2 == g_term_x[k])
-			&& (3 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 3;
-		}
-		if((1 == g_term_x[k])
-			&& (3 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 3;
-		}
-		if((0 == g_term_x[k])
-			&& (3 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 2;
-		}
-
-		if((11 == g_term_x[k])
-			&& (2 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 2;
-		}
-		if((10 == g_term_x[k])
-			&& (2 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 4;
-		}
-		if((9 == g_term_x[k])
-			&& (2 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 4;
-		}
-		if((8 == g_term_x[k])
-			&& (2 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 1;
-		}
-		if((7 == g_term_x[k])
-			&& (2 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 5;
-		}
-		if((6 == g_term_x[k])
-			&& (2 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 4;
-		}
-		if((5 == g_term_x[k])
-			&& (2 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 0;
-		}
-		if((4 == g_term_x[k])
-			&& (2 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 2;
-		}
-		if((3 == g_term_x[k])
-			&& (2 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 0;
-		}
-		if((2 == g_term_x[k])
-			&& (2 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 4;
-		}
-		if((1 == g_term_x[k])
-			&& (2 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 0;
-		}
-		if((0 == g_term_x[k])
-			&& (2 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 3;
-		}
-
-		if((13 == g_term_x[k])
-			&& (1 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 1;
-		}
-		if((12 == g_term_x[k])
-			&& (1 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 6;
-		}
-		if((11 == g_term_x[k])
-			&& (1 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 6;
-		}
-		if((9 == g_term_x[k])
-			&& (1 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 0;
-		}
-		if((8 == g_term_x[k])
-			&& (1 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 4;
-		}
-		if((7 == g_term_x[k])
-			&& (1 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 5;
-		}
-		if((5 == g_term_x[k])
-			&& (1 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 2;
-		}
-		if((4 == g_term_x[k])
-			&& (1 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 6;
-		}
-		if((3 == g_term_x[k])
-			&& (1 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 5;
-		}
-		if((1 == g_term_x[k])
-			&& (1 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 4;
-		}
-		if((0 == g_term_x[k])
-			&& (1 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 4;
-		}
-
-		if((14 == g_term_x[k])
-			&& (0 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 6;
-		}
-		if((13 == g_term_x[k])
-			&& (0 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 0;
-		}
-		if((12 == g_term_x[k])
-			&& (0 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 3;
-		}
-		if((11 == g_term_x[k])
-			&& (0 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 6;
-		}
-		if((10 == g_term_x[k])
-			&& (0 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 3;
-		}
-		if((9 == g_term_x[k])
-			&& (0 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 1;
-		}
-		if((8 == g_term_x[k])
-			&& (0 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 5;
-		}
-		if((7 == g_term_x[k])
-			&& (0 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 4;
-		}
-		if((6 == g_term_x[k])
-			&& (0 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 1;
-		}
-		if((4 == g_term_x[k])
-			&& (0 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 4;
-		}
-		if((2 == g_term_x[k])
-			&& (0 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 0;
-		}
-		if((1 == g_term_x[k])
-			&& (0 == g_term_y[k]))
-		{
-			g_term_c[0][0][k] = 2;
-		}
-	}
-	
-	return 0;
-}
-#endif
-
 int rr_factorization()
 {
 	unsigned long long i = 0, j = 0, k = 0, l = 0, r = 0, s = 0;
 	long long is_root = 0;
+
+	rr_err = 0;
 
 	//test_factorization_init();
 	f_root_init();
@@ -2531,6 +2535,10 @@ int rr_factorization()
 						/*just exit*/
 						k = GF_FIELD;
 						r = f_root_cnt[s];
+						if(0 == rr_err)
+						{
+							rr_err = 1;
+						}
 					}
 				}
 			}
@@ -2550,98 +2558,6 @@ int rr_factorization()
 	return 0;
 }
 
-float euc_distance_code_cal(unsigned char *a,
-								   float **b,
-								   unsigned long long len)
-{
-	float euc_distance = 0;
-
-	unsigned long long i = 0;
-	unsigned long long symbol_num = CODEWORD_LEN * GF_Q * BITS_PER_SYMBOL_BPSK;
-	float **a_mod;
-	a_mod = (float**)malloc(sizeof(float*) * symbol_num);
-	for (i = 0; i < symbol_num; i++)
-	{
-		a_mod[i] = (float*)malloc(sizeof(float) * 2);
-	}
-
-	bpsk_mod(a,
-			 len,
-			 a_mod,
-			 symbol_num);
-
-	for(i = 0; i < symbol_num; i++)
-	{
-		euc_distance = euc_distance + abs(a_mod[i][0] - b[i][0])
-									+ abs(a_mod[i][1] - b[i][1]);
-	}
-
-	for (i = 0; i < symbol_num; i++)
-	{
-  		free(a_mod[i]);
-		a_mod[i] = NULL;
-  	}
-	free(a_mod);
-	a_mod = NULL;
-
-	//DEBUG_IMPOTANT("Euc. Distance Test: %d\n", euc_distance);
-
-	return euc_distance;
-}
-
-unsigned long long hamm_distance_code_cal(unsigned char *a,
-									  unsigned char *b,
-									  unsigned long long len)
-{
-	unsigned long long hamm_distance = 0;
-
-	long long i = 0;
-
-	for(i = 0; i < len; i++)
-	{
-		if(a[i] != b[i])
-		{
-			hamm_distance = hamm_distance + 1;
-		}
-	}
-
-	//DEBUG_IMPOTANT("Hamming Distance Test: %d\n", hamm_distance);
-
-	return hamm_distance;
-}
-
-unsigned long long hamm_distance_bit_cal(unsigned char *a,
-									  unsigned char *b,
-									  unsigned long long len)
-{
-	unsigned long long hamm_distance_bit = 0;
-
-	long long i = 0, j = 0;
-	unsigned char tmp_a = 0, tmp_b = 0;
-
-	for(i = 0; i < len; i++)
-	{
-		if(a[i] != b[i])
-		{
-			for(j = 0; j < GF_Q; j++)
-			{
-				/*notice these indexes, 0xFF + 0x1 = 0, ..., 0x6 + 0x1 = 7*/
-				tmp_a = (power_polynomial_table[a[i] + 0x1][1] >> j) & 0x1;
-				tmp_b = (power_polynomial_table[b[i] + 0x1][1] >> j) & 0x1;
-
-				if(tmp_a != tmp_b)
-				{
-					hamm_distance_bit = hamm_distance_bit + 1;
-				}
-			}
-		}
-	}
-
-	//DEBUG_IMPOTANT("Hamming Distance Test: %d\n", hamm_distance);
-
-	return hamm_distance_bit;
-}
-
 int check_rr_decoded_result()
 {
 	long long r = 0, s = 0, prev_r = 0;
@@ -2649,8 +2565,6 @@ int check_rr_decoded_result()
 	unsigned char tmp_decoded_message[MESSAGE_LEN];
 	unsigned char tmp_decoded_codeword[CODEWORD_LEN];
 	//unsigned long long hamm_distance_debug = 0xFFFF;
-
-	FILE *frc;
 
 	memset(tmp_decoded_message, 0xFF, sizeof(unsigned char) * MESSAGE_LEN);
 	memset(tmp_decoded_codeword, 0xFF, sizeof(unsigned char) * CODEWORD_LEN);
@@ -2756,6 +2670,662 @@ int check_rr_decoded_result()
 
 	return 0;
 }
+#endif
+
+int chien_searching_for_g_0_y_recur(unsigned char *g_c_in, unsigned char root_test)
+{
+	long long is_root = 0;
+	unsigned long long k = 0;
+	unsigned char tmp = 0xFF, tmp_sum = 0xFF;
+	
+	for(k = 0; k < (TERM_SIZE * TERM_SIZE); k++)
+	{
+		if(0xFF != g_c_in[k])
+		{
+			tmp = 0xFF;
+			tmp = gf_pow_cal(root_test, g_term_y[k]);
+			//DEBUG_NOTICE("tmp: %x | %x^%d\n", tmp, root_test, g_term_y[k]);
+			//DEBUG_NOTICE("tmp: %x | %x*%x\n", gf_multp(tmp, g_term_0_y_c[tern_idx][k]), tmp, g_term_0_y_c[tern_idx][k]);
+			tmp = gf_multp(tmp, g_c_in[k]);
+			//DEBUG_NOTICE("tmp_sum: %x | %x+%x\n", gf_add(tmp_sum, tmp), tmp_sum, tmp);
+			tmp_sum = gf_add(tmp_sum, tmp);
+		}
+	}
+
+	if(0xFF == tmp_sum)
+	{
+		is_root = 1;
+		DEBUG_INFO("is_root: %x\n", root_test);
+	}
+	else
+	{
+		is_root = 0;
+	}
+
+	return is_root;
+}
+
+int g_term_0_y_cal_recur(unsigned char *g_c_in, unsigned char *g_c_out)
+{
+	unsigned long long i = 0, j = 0;
+
+	/*clear*/
+	memset(g_c_out, 0xFF, sizeof(unsigned char) * (TERM_SIZE * TERM_SIZE));
+
+	for(j = 0; j < (TERM_SIZE * TERM_SIZE); j++)
+	{	
+		if((0 != g_term_x[j])
+			&& (0xFF != g_c_in[j]))
+		{
+			g_c_out[j] = 0xFF;
+			DEBUG_NOTICE("g_term_set_to_zero: %d | %d %d | %x %x\n",
+					j,
+					g_term_x[j],
+					g_term_y[j],
+					g_c_in[j],
+					g_c_out[j]);
+		}
+		else
+		{
+			g_c_out[j] = g_c_in[j];
+#if (1 == CFG_DEBUG_NOTICE)
+			if(0xFF != g_c_out[j])
+			{
+				DEBUG_NOTICE("g_term_0_y: %d | %d %d | %x\n",
+						j,
+						g_term_x[j],
+						g_term_y[j],
+						g_c_out[j]);
+			}
+#endif
+		}
+	}
+
+	return 0;
+}
+
+unsigned char g_term_x_0_cal_recur(unsigned char *g_c_in)
+{
+	unsigned char val = 0xFF;
+	unsigned long long j = 0;
+
+	unsigned char g_c_x_0[TERM_SIZE * TERM_SIZE];
+	memset(g_c_x_0, 0xFF, sizeof(unsigned char) * (TERM_SIZE * TERM_SIZE));
+
+	for(j = 0; j < (TERM_SIZE * TERM_SIZE); j++)
+	{
+		if((0 != g_term_y[j])
+			&& (0xFF != g_c_in[j]))
+		{
+			g_c_x_0[j] = 0xFF;
+		}
+		else
+		{
+			g_c_x_0[j] = g_c_in[j];
+		}
+
+		val = gf_add(val, g_c_x_0[j]);
+	}
+
+	return val;
+}
+
+int g_term_new_gen_recur(unsigned char *g_c_in, unsigned char root_insert)
+{
+	unsigned long long i = 0, j = 0, k = 0, l = 0, r = 0, s = 0;
+
+	unsigned char tmp = 0xFF;
+	unsigned char g_term_c_expand[TERM_SIZE * TERM_SIZE];
+	unsigned char tmp_g_term_c_expand[TERM_SIZE * TERM_SIZE];
+	unsigned char mul_g_term_c_expand[TERM_SIZE * TERM_SIZE];
+	unsigned char g_term_c_expand_store[TERM_SIZE * TERM_SIZE];
+
+	for(k = 0; k < (TERM_SIZE * TERM_SIZE); k++)
+	{
+		if((1 == g_term_x[k])
+			&& (1 == g_term_y[k]))
+		{
+			mul_g_term_c_expand[k] = 0x0;
+			g_term_c_expand[k] = 0xFF;
+			DEBUG_NOTICE("g_term_init: %d %d | %x %x\n",
+					g_term_x[k],
+					g_term_y[k],
+					g_term_c_expand[k],
+					mul_g_term_c_expand[k]);
+		}
+		else if((0 == g_term_x[k])
+			&& (0 == g_term_y[k]))
+		{
+			mul_g_term_c_expand[k] = root_insert;
+			g_term_c_expand[k] = 0x0;
+			DEBUG_NOTICE("g_term_init: %d %d | %x %x\n",
+					g_term_x[k],
+					g_term_y[k],
+					g_term_c_expand[k],
+					mul_g_term_c_expand[k]);
+		}
+		else
+		{
+			mul_g_term_c_expand[k] = 0xFF;
+			g_term_c_expand[k] = 0xFF;
+		}
+		g_term_c_expand_store[k] = 0xFF;
+		tmp_g_term_c_expand[k] = 0xFF;
+	}
+
+	for(k = 0; k < (TERM_SIZE * TERM_SIZE); k++)//for every term contain "y"
+	{		
+		if((0 != g_term_y[k])			
+			&& (0xFF != g_c_in[k]))	
+		{
+			DEBUG_NOTICE("*********************\n");
+			DEBUG_NOTICE("g_term_have_y: %d | %d %d | %x\n",
+		    k,
+		    g_term_x[k],
+		    g_term_y[k],
+			g_c_in[k]);
+			
+			for(l = 0; l < g_term_y[k]; l++)//for pow_cal, g*m => tmp
+			{
+				//DEBUG_NOTICE("*********************\n");
+				for(i = 0; i < (TERM_SIZE * TERM_SIZE); i++)//for every a
+				{
+					
+					if(0xFF != g_term_c_expand[i])
+					{
+						DEBUG_NOTICE("g_term_c_expand: %ld | %ld %ld | %x\n",
+						i,
+					    g_term_x[i],
+					    g_term_y[i],
+					    g_term_c_expand[i]);
+
+						for(j = 0; j < (TERM_SIZE * TERM_SIZE); j++)//for every b
+						{
+							if(0xFF != mul_g_term_c_expand[j])
+							{
+								DEBUG_NOTICE("mul_g_term_c_expand: %d %d | %x\n",
+							    g_term_x[j],
+							    g_term_y[j],
+							    mul_g_term_c_expand[j]);
+
+								for(r = 0; r < (TERM_SIZE * TERM_SIZE); r++)//find the place
+								{
+									if(((g_term_x[i] + g_term_x[j]) == g_term_x[r])
+										&& ((g_term_y[i] + g_term_y[j]) == g_term_y[r]))//r <= place(i, j)
+									{
+										tmp_g_term_c_expand[r] = gf_add(tmp_g_term_c_expand[r], gf_multp(g_term_c_expand[i], mul_g_term_c_expand[j]));
+										DEBUG_NOTICE("tmp_g_term_c_expand: %d %d | %x\n",
+											     g_term_x[r],
+											     g_term_y[r],
+											     tmp_g_term_c_expand[r]);
+										break;
+									}
+								}
+							}
+						}
+					}
+				}
+
+				/*after every mulp cal, copy and clear*/
+				for(r = 0; r < (TERM_SIZE * TERM_SIZE); r++)
+				{
+					g_term_c_expand[r] = tmp_g_term_c_expand[r];
+					tmp_g_term_c_expand[r] = 0xFF;
+#if (1 == CFG_DEBUG_NOTICE)
+					if(0xFF != g_term_c_expand[r])
+					{
+						DEBUG_NOTICE("g_term_expand_update: %d %d | %x\n",
+							    g_term_x[r],
+							    g_term_y[r],
+							    g_term_c_expand[r]);
+					}
+#endif					
+				}
+			}
+
+			for(r = 0; r < (TERM_SIZE * TERM_SIZE); r++)
+			{
+				if(0xFF != g_term_c_expand[r])
+				{
+					for(s = 0; s < (TERM_SIZE * TERM_SIZE); s++)
+					{
+						if(((g_term_x[r] + g_term_x[k]) == g_term_x[s])
+						&& (g_term_y[r] == g_term_y[s]))
+						{
+							DEBUG_NOTICE("g_term_expand_store updating: %d + %d = %d, %d | %x %x %x\n",
+								    g_term_x[r],
+								    g_term_x[k],
+							    	g_term_x[s],
+							    	g_term_y[s],
+							    	g_term_c_expand[r],
+							    	g_c_in[k],
+							    	g_term_c_expand_store[s]);
+							tmp = gf_multp(g_term_c_expand[r], g_c_in[k]);
+							g_term_c_expand_store[s] = gf_add(g_term_c_expand_store[s], tmp);
+							DEBUG_NOTICE("g_term_expand_store: %d %d | %x\n",
+							    	g_term_x[s],
+							    	g_term_y[s],
+							    	g_term_c_expand_store[s]);
+						}
+					}
+					g_term_c_expand[r] = 0xFF;
+				}
+			}
+
+			for(r = 0; r < (TERM_SIZE * TERM_SIZE); r++)
+			{
+				if((1 == g_term_x[r])
+					&& (1 == g_term_y[r]))
+				{
+					mul_g_term_c_expand[r] = 0x0;
+					g_term_c_expand[r] = 0xFF;
+				}
+				else if((0 == g_term_x[r])
+					&& (0 == g_term_y[r]))
+				{
+					mul_g_term_c_expand[r] = root_insert;
+					g_term_c_expand[r] = 0x0;
+				}
+				else
+				{
+					mul_g_term_c_expand[r] = 0xFF;
+					g_term_c_expand[r] = 0xFF;
+				}
+				tmp_g_term_c_expand[r] = 0xFF;
+			}
+
+			/*clear terms have y*/
+			g_c_in[k] = 0xFF;
+		}
+	}
+
+	DEBUG_NOTICE("*********************\n");
+	/*update g_term*/
+	for(r = 0; r < (TERM_SIZE * TERM_SIZE); r++)
+	{
+		g_c_in[r] = gf_add(g_term_c_expand_store[r], g_c_in[r]);
+#if (1 == CFG_DEBUG_NOTICE)
+		if(0xFF != g_c_in[r])
+		{
+			DEBUG_NOTICE("g_term_update: %d | %d %d | %x\n",
+				    r,
+				    g_term_x[r],
+				    g_term_y[r],
+					g_c_in[r]);
+		}
+#endif		
+	}
+
+	DEBUG_NOTICE("*********************\n");
+	/*eliminate common factor*/
+	unsigned char cmn_factor = 0xFF;//deal with x
+	for(r = 0; r < (TERM_SIZE * TERM_SIZE); r++)
+	{
+		if(0xFF != g_c_in[r])
+		{
+			if(cmn_factor > g_term_x[r])
+			{
+				cmn_factor = g_term_x[r];
+			}
+		}
+	}
+	DEBUG_NOTICE("cmn_factor for x: %d\n", cmn_factor);
+	if(0 != cmn_factor)
+	{
+		for(r = 0; r < (TERM_SIZE * TERM_SIZE); r++)
+		{
+			if(0xFF != g_c_in[r])
+			{
+				for(s = 0; s < (TERM_SIZE * TERM_SIZE); s++)
+				{
+					if((g_term_x[s] == (g_term_x[r] - cmn_factor))
+						&& (g_term_y[s] == g_term_y[r]))
+					{
+						g_c_in[s] = g_c_in[r];
+						g_c_in[r] = 0xFF;
+						DEBUG_NOTICE("g_term_update_x: %d | %d %d | %x\n",
+							    s,
+							    g_term_x[s],
+							    g_term_y[s],
+							    g_c_in[s]);
+						break;
+					}
+				}
+			}
+		}
+	}
+
+#if (1 == CFG_DEBUG_NOTICE)
+	DEBUG_NOTICE("*********************\n");
+	for(r = 0; r < (TERM_SIZE * TERM_SIZE); r++)
+	{
+		if(0xFF != g_c_in[r])
+		{
+			DEBUG_INFO("g_term_update_OK: %d | %d %d | %x\n",
+				    r,
+				    g_term_x[r],
+				    g_term_y[r],
+				    g_c_in[r]);
+		}
+	}
+#endif
+	
+	return 0;
+}
+
+int check_rr_decoded_result_recur(unsigned char *msg)
+{
+	unsigned long long i = 0;
+	unsigned long long hamm_distance_code = 0xFFFF, hamm_distance_bit = 0xFFFF, tmp_code = 0, tmp_bit = 0;
+	unsigned char tmp_decoded_codeword[CODEWORD_LEN];
+
+	for(i = 0; i < MESSAGE_LEN; i++)
+	{
+		DEBUG_NOTICE("Strage Obsv1: %x %x\n",
+			      decoded_message[i],
+			      message_polynomial[i]);
+	}
+
+	//hamm_distance_debug = 0xFFFF;
+	memset(tmp_decoded_codeword, 0xFF, sizeof(unsigned char) * CODEWORD_LEN);
+
+	evaluation_encoding_v2(msg, tmp_decoded_codeword);
+
+	tmp_code = hamm_distance_code_cal(tmp_decoded_codeword, received_polynomial, CODEWORD_LEN);
+	//tmp_code = (unsigned long long)euc_distance_code_cal(tmp_decoded_codeword, recv_seq, CODEWORD_LEN);
+	tmp_bit = hamm_distance_bit_cal(tmp_decoded_codeword, received_polynomial, CODEWORD_LEN);
+
+	if(tmp_code < best_hamm_distance_code)
+	{
+		best_hamm_distance_code = tmp_code;
+		best_hamm_distance_bit = tmp_bit;
+		memcpy(decoded_codeword, tmp_decoded_codeword, sizeof(unsigned char) * CODEWORD_LEN);
+#if (1 == SYS_ENC)				
+		memcpy(decoded_message, (tmp_decoded_codeword + (CODEWORD_LEN - MESSAGE_LEN)), sizeof(unsigned char) * MESSAGE_LEN);
+#else
+		memcpy(decoded_message, msg, sizeof(unsigned char) * MESSAGE_LEN);
+#endif
+		//if(0 == hamm_distance_debug)
+		{
+			DEBUG_NOTICE("Strage Err: %d %d\n", decoding_ok_flag, hamm_distance_debug);
+		}
+	}
+	if(tmp_code == best_hamm_distance_code)
+	{
+		if(tmp_bit < best_hamm_distance_bit)
+		{
+			best_hamm_distance_bit = tmp_bit;
+			memcpy(decoded_codeword, tmp_decoded_codeword, sizeof(unsigned char) * CODEWORD_LEN);
+#if (1 == SYS_ENC)				
+			memcpy(decoded_message, (tmp_decoded_codeword + (CODEWORD_LEN - MESSAGE_LEN)), sizeof(unsigned char) * MESSAGE_LEN);
+#else
+			memcpy(decoded_message, msg, sizeof(unsigned char) * MESSAGE_LEN);
+#endif
+
+			//if(0 == hamm_distance_debug)
+			{
+				DEBUG_NOTICE("Strage Err: %d %d\n", decoding_ok_flag, hamm_distance_debug);
+			}
+		}
+	}
+
+	hamm_distance_debug = hamm_distance_code_cal(msg, message_polynomial, MESSAGE_LEN);		
+	DEBUG_IMPOTANT("Hamming Distance Debug: %ld\n", hamm_distance_debug);
+
+	if(0 == hamm_distance_debug)
+	{
+		best_hamm_distance_code = 0;
+		best_hamm_distance_bit = 0;
+		
+		memcpy(decoded_codeword, tmp_decoded_codeword, sizeof(unsigned char) * CODEWORD_LEN);
+#if (1 == SYS_ENC)				
+		memcpy(decoded_message, (tmp_decoded_codeword + (CODEWORD_LEN - MESSAGE_LEN)), sizeof(unsigned char) * MESSAGE_LEN);
+#else
+		memcpy(decoded_message, msg, sizeof(unsigned char) * MESSAGE_LEN);
+#endif
+
+		if(1 == decoding_ok_flag)
+		{
+			decoding_ok_flag = 2;
+		}
+		else
+		{
+			DEBUG_NOTICE("Strage Err: %d %d\n", decoding_ok_flag, hamm_distance_debug);
+		}
+		DEBUG_NOTICE("Match!\n");
+	}
+
+	DEBUG_NOTICE("Strage Test: %d %d\n", decoding_ok_flag, hamm_distance_debug);
+	for(i = 0; i < MESSAGE_LEN; i++)
+	{
+		DEBUG_NOTICE("Strage Obsv2: %x %x\n",
+			      decoded_message[i],
+			      message_polynomial[i]);
+	}
+#if 0
+	/*special test*/
+	unsigned char diff_cnt = 0;
+	for(i = 0; i < MESSAGE_LEN; i++)
+	{
+		if(msg[i] != message_polynomial[i])
+		{
+			diff_cnt = diff_cnt + 1;
+			break;
+		}
+	}
+	if(0 == diff_cnt)
+	{
+		best_hamm_distance_code = 0;
+		best_hamm_distance_bit = 0;
+		
+		memcpy(decoded_codeword, tmp_decoded_codeword, sizeof(unsigned char) * CODEWORD_LEN);
+#if (1 == SYS_ENC)				
+		memcpy(decoded_message, (tmp_decoded_codeword + (CODEWORD_LEN - MESSAGE_LEN)), sizeof(unsigned char) * MESSAGE_LEN);
+#else
+		memcpy(decoded_message, msg, sizeof(unsigned char) * MESSAGE_LEN);
+#endif
+		hamm_distance_debug = 0;
+
+		if(1 == decoding_ok_flag)
+		{
+			decoding_ok_flag = 2;
+		}
+	}
+#endif
+
+	return 0;
+}
+
+int dfs_rr_recur(unsigned char *g_c_q,
+					unsigned char *g_c_0_y,
+					unsigned long long l)
+{
+	DEBUG_NOTICE("dfs_rr_recur: %ld\n", l);
+
+	if(MESSAGE_LEN < l)
+	{
+		if(0xFF == g_term_x_0_cal_recur(g_c_q))
+		{
+			DEBUG_NOTICE("Message Found\n");
+			check_rr_decoded_result_recur(tmp_message);
+
+			return 1;
+		}
+		else
+		{
+			DEBUG_NOTICE("Decoding Fail\n");
+
+			return 0;
+		}
+	}
+
+	unsigned long long i = 0, j = 0;
+	long long is_root = 0;
+	unsigned char root = 0xFF;
+
+	unsigned char *g_c_q_new;
+	g_c_q_new = (unsigned char*)malloc(sizeof(unsigned char) * (TERM_SIZE * TERM_SIZE));
+
+	for(i = 0; i < GF_FIELD; i++)//test roots
+	{
+		memcpy(g_c_q_new, g_c_q, sizeof(unsigned char) * (TERM_SIZE * TERM_SIZE));
+		g_term_0_y_cal_recur(g_c_q_new, g_c_0_y);
+
+		is_root = chien_searching_for_g_0_y_recur(g_c_0_y, power_polynomial_table[i][0]);
+		if(1 == is_root)
+		{
+			root = power_polynomial_table[i][0];
+			tmp_message[l] = root;
+			g_term_new_gen_recur(g_c_q_new, root);
+
+			DEBUG_INFO("root: %ld %ld %x\n", l, i, root);
+
+			dfs_rr_recur(g_c_q_new,
+						  g_c_0_y,
+						  l + 1);
+			DEBUG_INFO("root2: %ld %ld %x\n", 0, i, root);
+		}
+	}
+
+	free(g_c_q_new);
+	g_c_q_new = NULL;
+	
+	return 0;
+}
+
+int rr_factorization_recur()
+{
+	best_hamm_distance_code = 0xFFFF;
+	best_hamm_distance_bit = 0xFFFF;
+	
+	unsigned long long i = 0, j = 0;
+	long long is_root = 0;
+	unsigned char root = 0xFF;
+
+	unsigned char *g_c_q, *g_c_0_y;
+	g_c_q = (unsigned char*)malloc(sizeof(unsigned char) * (TERM_SIZE * TERM_SIZE));
+	g_c_0_y = (unsigned char*)malloc(sizeof(unsigned char) * (TERM_SIZE * TERM_SIZE));
+
+	for(i = 0; i < GF_FIELD; i++)//test roots
+	{
+		memcpy(g_c_q, g_term_c_p[g_term_phase][0], sizeof(unsigned char) * (TERM_SIZE * TERM_SIZE));
+		g_term_0_y_cal_recur(g_c_q, g_c_0_y);
+
+		is_root = chien_searching_for_g_0_y_recur(g_c_0_y, power_polynomial_table[i][0]);
+		if(1 == is_root)
+		{
+			root = power_polynomial_table[i][0];
+			tmp_message[0] = root;
+			g_term_new_gen_recur(g_c_q, root);
+
+			DEBUG_INFO("root: %ld %ld %x\n", 0, i, root);
+
+			dfs_rr_recur(g_c_q,
+						  g_c_0_y,
+						  1);
+			DEBUG_INFO("root1: %ld %ld %x\n", 0, i, root);
+		}
+	}
+
+	free(g_c_q);
+	g_c_q = NULL;
+	free(g_c_0_y);
+	g_c_0_y = NULL;
+	
+	return 0;
+}
+
+float euc_distance_code_cal(unsigned char *a,
+								   float **b,
+								   unsigned long long len)
+{
+	float euc_distance = 0;
+
+	unsigned long long i = 0;
+	unsigned long long symbol_num = CODEWORD_LEN * GF_Q * BITS_PER_SYMBOL_BPSK;
+	float **a_mod;
+	a_mod = (float**)malloc(sizeof(float*) * symbol_num);
+	for (i = 0; i < symbol_num; i++)
+	{
+		a_mod[i] = (float*)malloc(sizeof(float) * 2);
+	}
+
+	bpsk_mod(a,
+			 len,
+			 a_mod,
+			 symbol_num);
+
+	for(i = 0; i < symbol_num; i++)
+	{
+		euc_distance = euc_distance + abs(a_mod[i][0] - b[i][0])
+									+ abs(a_mod[i][1] - b[i][1]);
+	}
+
+	for (i = 0; i < symbol_num; i++)
+	{
+  		free(a_mod[i]);
+		a_mod[i] = NULL;
+  	}
+	free(a_mod);
+	a_mod = NULL;
+
+	//DEBUG_IMPOTANT("Euc. Distance Test: %d\n", euc_distance);
+
+	return euc_distance;
+}
+
+unsigned long long hamm_distance_code_cal(unsigned char *a,
+									  unsigned char *b,
+									  unsigned long long len)
+{
+	unsigned long long hamm_distance = 0;
+
+	unsigned long long i = 0;
+
+	for(i = 0; i < len; i++)
+	{
+		if(a[i] != b[i])
+		{
+			hamm_distance = hamm_distance + 1;
+		}
+	}
+
+	//DEBUG_IMPOTANT("Hamming Distance Test: %d\n", hamm_distance);
+
+	return hamm_distance;
+}
+
+unsigned long long hamm_distance_bit_cal(unsigned char *a,
+									  unsigned char *b,
+									  unsigned long long len)
+{
+	unsigned long long hamm_distance_bit = 0;
+
+	long long i = 0, j = 0;
+	unsigned char tmp_a = 0, tmp_b = 0;
+
+	for(i = 0; i < len; i++)
+	{
+		if(a[i] != b[i])
+		{
+			for(j = 0; j < GF_Q; j++)
+			{
+				/*notice these indexes, 0xFF + 0x1 = 0, ..., 0x6 + 0x1 = 7*/
+				tmp_a = (power_polynomial_table[a[i] + 0x1][1] >> j) & 0x1;
+				tmp_b = (power_polynomial_table[b[i] + 0x1][1] >> j) & 0x1;
+
+				if(tmp_a != tmp_b)
+				{
+					hamm_distance_bit = hamm_distance_bit + 1;
+				}
+			}
+		}
+	}
+
+	//DEBUG_IMPOTANT("Hamming Distance Test: %d\n", hamm_distance);
+
+	return hamm_distance_bit;
+}
 
 int as_decoding()
 {
@@ -2770,16 +3340,56 @@ int as_decoding()
 	DEBUG_IMPOTANT("\n");
 #endif
 
+	clock_t start, stop;
+	float runtime;
+	start = clock();
+
 	memset(decoded_codeword, 0xFF, sizeof(unsigned char) * CODEWORD_LEN);
 	memset(decoded_message, 0xFF, sizeof(unsigned char) * MESSAGE_LEN);
 
+	stop = clock();
+	runtime = (stop - start) / 1000.0000;
+	//BUG_SYS("Time1 %fs\n", runtime);
+
 	g_term_init();
+
+	stop = clock();
+	runtime = (stop - start) / 1000.0000;
+	//DEBUG_SYS("Time2 %fs\n", runtime);
+
+#if 0//for lcc interpolation test, not care about interpolating order
+	unsigned char tmp = received_polynomial[0];
+	received_polynomial[1] = received_polynomial[CODEWORD_LEN - 2];
+	received_polynomial[CODEWORD_LEN - 2] = tmp;
+	tmp = received_polynomial[1];
+	received_polynomial[1] = received_polynomial[CODEWORD_LEN - 3];
+	received_polynomial[CODEWORD_LEN - 3] = tmp;
+#endif
 
 	koetter_interpolation();
 
+	stop = clock();
+	runtime = (stop - start) / 1000.0000;
+	//BUG_SYS("Time3 %fs\n", runtime);
+
+#if (1 == RECUR_RR)
+	rr_factorization_recur();
+#else
 	rr_factorization();
 
+	stop = clock();
+	runtime = (stop - start) / 1000.0000;
+	//DEBUG_SYS("Time4 %fs\n", runtime);
+
 	check_rr_decoded_result();
+#endif
+	stop = clock();
+	runtime = (stop - start) / 1000.0000;
+	//BUG_SYS("Time5 %fs\n", runtime);
+
+#if (1 == RE_ENCODING)
+	recover_codeword();
+#endif
 
 	return 0;
 }
