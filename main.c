@@ -9,13 +9,23 @@
 #include "channel.h"
 #include "time.h"
 
-#define EARLY_TERMINATION	1
+#define EARLY_TERMINATION		1
+#define EARLY_TERMINATION_NUM	100
 
 void init_simulation()
 {
 	srand(time(NULL));
 	init_genrand((long)(time(NULL)));
 
+#if (1 == GF_CAL_COUNT)
+	memset(err_hist, 0, sizeof(unsigned long long) * (CODEWORD_LEN - MESSAGE_LEN - 1));
+	memset(add_cnt_hist, 0, sizeof(unsigned long long) * (CODEWORD_LEN - MESSAGE_LEN - 1));
+	memset(mul_cnt_hist, 0, sizeof(unsigned long long) * (CODEWORD_LEN - MESSAGE_LEN - 1));
+	memset(div_cnt_hist, 0, sizeof(unsigned long long) * (CODEWORD_LEN - MESSAGE_LEN - 1));
+	memset(real_cbm_cnt_hist, 0, sizeof(unsigned long long) * (CODEWORD_LEN - MESSAGE_LEN - 1));
+	memset(real_mul_ff_cnt_hist, 0, sizeof(unsigned long long) * (CODEWORD_LEN - MESSAGE_LEN - 1));
+	memset(pow_cnt_hist, 0, sizeof(unsigned long long) * (CODEWORD_LEN - MESSAGE_LEN - 1));
+#endif
 	DEBUG_SYS("init_simulation OK\n");
 
 	return;
@@ -31,6 +41,9 @@ void main()
 	unsigned char frame_err_flag = 0, uncoded_frame_err_flag = 0;
 	unsigned char tmp_mes = 0, tmp_dec = 0;
 	unsigned long long hamm_err = 0, rr_err_cnt = 0;
+//#if (1 == GF_CAL_COUNT)	
+	unsigned long long symbol_err_this_frame = 0;
+//#endif
 
 	clock_t start, stop;
 	float runtime;
@@ -112,13 +125,13 @@ void main()
 			//memset(message_polynomial, 0x0, sizeof(unsigned char) * MESSAGE_LEN);
 
 #if (1 == TEST_MODE)//test
-			message_polynomial[0] = 0x6;
-			message_polynomial[1] = 0xFF;
-			message_polynomial[2] = 0x5;
-			//message_polynomial[3] = 0xd;
-			//message_polynomial[4] = 0x4;
-			//message_polynomial[5] = 0xb;
-			//message_polynomial[6] = 0x7;
+			message_polynomial[0] = 0x2;
+			message_polynomial[1] = 0x7;
+			message_polynomial[2] = 0xD;
+			message_polynomial[3] = 0x7;
+			message_polynomial[4] = 0x3;
+			message_polynomial[5] = 0xC;
+			message_polynomial[6] = 0xA;
 			//memset(message_polynomial, 0x0, sizeof(unsigned char) * MESSAGE_LEN);
 #endif
 
@@ -172,13 +185,29 @@ void main()
 					 CODEWORD_LEN);
 #endif
 
+#if (1 == TEST_MODE)//test
+			/*transmission through channel*/
+#if 0
+			for(i = 0; i < CODEWORD_LEN; i++)
+			{
+				received_polynomial[i] = gf_add(encoded_polynomial[i], error_polynomial[i]);
+			}
+#else
+			//received_polynomial[0] = gf_add(encoded_polynomial[0], 0x0);
+			received_polynomial[0] = gf_add(encoded_polynomial[0], 0x2);
+			received_polynomial[3] = gf_add(encoded_polynomial[3], 0x3);
+			received_polynomial[5] = gf_add(encoded_polynomial[5], 0x0);
+			received_polynomial[9] = gf_add(encoded_polynomial[9], 0x2);
+#endif
+#endif
+
 			for(i = 0; i < CODEWORD_LEN; i++)
 			{
 				DEBUG_NOTICE("%x %x\n", received_polynomial[i], encoded_polynomial[i]);
 				if(received_polynomial[i] != encoded_polynomial[i])
 				{
 					uncoded_symbol_err = uncoded_symbol_err + 1;
-					err_num = err_num+ 1;
+					err_num = err_num + 1;
 					if(0 == uncoded_frame_err_flag)
 					{
 						uncoded_frame_err_flag = 1;
@@ -193,26 +222,11 @@ void main()
 							uncoded_bit_err = uncoded_bit_err + 1;
 						}
 					}
-					
+#if (1 == GF_CAL_COUNT)
+					symbol_err_this_frame++;
+#endif
 				}
 			}
-			uncoded_frame_err_flag = 0;
-
-#if (1 == TEST_MODE)//test
-			/*transmission through channel*/
-#if 0
-			for(i = 0; i < CODEWORD_LEN; i++)
-			{
-				received_polynomial[i] = gf_add(encoded_polynomial[i], error_polynomial[i]);
-			}
-#else
-			received_polynomial[1] = gf_add(encoded_polynomial[1], 0x0);
-			received_polynomial[4] = gf_add(encoded_polynomial[4], 0x0);
-			//received_polynomial[7] = gf_add(encoded_polynomial[7], 0xFF);
-			//received_polynomial[9] = gf_add(encoded_polynomial[9], 0xFF);
-			//received_polynomial[13] = gf_add(encoded_polynomial[13], 0xFF);
-#endif
-#endif
 
 #if 1
 			chnl_rel_cal();
@@ -223,6 +237,12 @@ void main()
 			
 			as_decoding();
 #endif
+
+#if (1 == GF_CAL_COUNT)			
+			gf_count_hist(symbol_err_this_frame);
+#endif
+			uncoded_frame_err_flag = 0;
+			symbol_err_this_frame = 0;
 
 			for(i = 0; i < MESSAGE_LEN; i++)
 			{
@@ -333,12 +353,17 @@ void main()
 				DEBUG_SYS("Bit Error: %ld\n", bit_err);
 				DEBUG_SYS("Hamming Error: %ld\n", hamm_err);
 				DEBUG_SYS("RR Error: %ld\n", rr_err_cnt);
+#if (1 == GF_CAL_COUNT)				
 				DEBUG_SYS("Add Cnt: %ld\n", add_cnt);
 				DEBUG_SYS("Mul Cnt: %ld\n", mul_cnt);
 				DEBUG_SYS("Div Cnt: %ld\n", div_cnt);
 				DEBUG_SYS("RCB Cnt: %ld\n", real_cbm_cnt);
 				DEBUG_SYS("RMF Cnt: %ld\n", real_mul_ff_cnt);
 				DEBUG_SYS("Pow Cnt: %ld\n", pow_cnt);
+#endif				
+				DEBUG_SYS("Max DX: %ld\n", max_dx);
+				DEBUG_SYS("Max DY: %ld\n", max_dy);
+				DEBUG_SYS("TERM_SIZE: %ld %ld\n", term_size_x, term_size_y);
 
 				frc = fopen(log_name, "a+");
 				fprintf(frc, "---------------------\n");
@@ -353,20 +378,51 @@ void main()
 				fprintf(frc, "Bit Error: %ld\n", bit_err);
 				fprintf(frc, "Hamming Error: %ld\n", hamm_err);
 				fprintf(frc, "RR Error: %ld\n", rr_err_cnt);
+#if (1 == GF_CAL_COUNT)				
 				fprintf(frc, "Add Cnt: %ld\n", add_cnt);
 				fprintf(frc, "Mul Cnt: %ld\n", mul_cnt);
 				fprintf(frc, "Div Cnt: %ld\n", div_cnt);
 				fprintf(frc, "RCB Cnt: %ld\n", real_cbm_cnt);
 				fprintf(frc, "RMF Cnt: %ld\n", real_mul_ff_cnt);
 				fprintf(frc, "Pow Cnt: %ld\n", pow_cnt);
+#endif				
 			    fclose(frc);
 				frc = NULL;
+
+#if (1 == GF_CAL_COUNT)
+				for(k = 0; k < (CODEWORD_LEN - MESSAGE_LEN - 1); k++)
+				{
+					if(0 != err_hist[k])
+					{
+						//DEBUG_SYS("-------------------\n");
+						//DEBUG_SYS("Err Hist: %ld %ld\n", k, err_hist[k]);
+						DEBUG_SYS("Add/Mul Hist: %ld %f %f\n", k, (float)(add_cnt_hist[k] / err_hist[k]), (float)(mul_cnt_hist[k] / err_hist[k]));
+						//DEBUG_SYS("Mul Hist: %ld %f\n", k, (float)(mul_cnt_hist[k] / err_hist[k]));
+						//DEBUG_SYS("Div Hist: %ld %f\n", k, (float)(div_cnt_hist[k] / err_hist[k]));
+						//DEBUG_SYS("RCB Hist: %ld %f\n", k, (float)(real_cbm_cnt_hist[k] / err_hist[k]));
+						//DEBUG_SYS("RMF Hist: %ld %f\n", k, (float)(real_mul_ff_cnt_hist[k] / err_hist[k]));
+						//DEBUG_SYS("Pow Hist: %ld %f\n", k, (float)(pow_cnt_hist[k] / err_hist[k]));
+
+						frc = fopen(log_name, "a+");
+						fprintf(frc, "-------------------\n");
+						fprintf(frc, "Err Hist: %ld %ld\n", k, err_hist[k]);
+						fprintf(frc, "Add Hist: %ld %f\n", k, (float)(add_cnt_hist[k] / err_hist[k]));
+						fprintf(frc, "Mul Hist: %ld %f\n", k, (float)(mul_cnt_hist[k] / err_hist[k]));
+						fprintf(frc, "Div Hist: %ld %f\n", k, (float)(div_cnt_hist[k] / err_hist[k]));
+						fprintf(frc, "RCB Hist: %ld %f\n", k, (float)(real_cbm_cnt_hist[k] / err_hist[k]));
+						fprintf(frc, "RMF Hist: %ld %f\n", k, (float)(real_mul_ff_cnt_hist[k] / err_hist[k]));
+						fprintf(frc, "Pow Hist: %ld %f\n", k, (float)(pow_cnt_hist[k] / err_hist[k]));
+						fclose(frc);
+						frc = NULL;
+					}
+				}
+#endif				
 			}
 
 /*early termination for simulation, reduce iteration times*/
 /*more than 10 errors are found, and 10% simulation times have been excuted*/
 #if (1 == EARLY_TERMINATION)
-			if((10 <= (frame_err - hamm_err))
+			if((EARLY_TERMINATION_NUM <= (frame_err - hamm_err))
 				&& ((iter_cnt / 10) < iter))
 			{
 				/*simulation times are enough, go to next Eb/N0 point*/
@@ -392,12 +448,24 @@ void main()
 		DEBUG_SYS("Bit Error: %ld\n", bit_err);
 		DEBUG_SYS("Hamming Error: %ld\n", hamm_err);
 		DEBUG_SYS("RR Error: %ld\n", rr_err_cnt);
-		DEBUG_SYS("Add Cnt: %ld\n", add_cnt);
+#if (1 == GF_CAL_COUNT)		
+		DEBUG_SYS("Add/Mul Cnt: %ld %ld\n", add_cnt, mul_cnt);
 		DEBUG_SYS("Mul Cnt: %ld\n", mul_cnt);
 		DEBUG_SYS("Div Cnt: %ld\n", div_cnt);
 		DEBUG_SYS("RCB Cnt: %ld\n", real_cbm_cnt);
 		DEBUG_SYS("RMF Cnt: %ld\n", real_mul_ff_cnt);
 		DEBUG_SYS("Pow Cnt: %ld\n", pow_cnt);
+#endif
+		DEBUG_SYS("Uncoded Results: %.10lf %.10lf %.10lf\n", 
+			    (double)uncoded_frame_err / (double)iter,
+			    (double)uncoded_symbol_err / (double)iter / CODEWORD_LEN * BITS_PER_SYMBOL_BPSK,
+			    (double)uncoded_bit_err / (double)iter / CODEWORD_LEN * BITS_PER_SYMBOL_BPSK / GF_Q);
+		DEBUG_SYS("Decoded Results: %.10lf %.10lf %.10lf %.10lf\n", 
+				(double)frame_err / (double)iter,
+				(double)symbol_err / (double)iter / CODEWORD_LEN * BITS_PER_SYMBOL_BPSK,
+				(double)bit_err / (double)iter / CODEWORD_LEN * BITS_PER_SYMBOL_BPSK / GF_Q,
+				(double)(frame_err - hamm_err) / (double)iter);
+		
 		frc = fopen(log_name, "a+");
 		fprintf(frc, "*********************************\n");
 		fprintf(frc, "Time: %fs\n", runtime);
@@ -411,12 +479,14 @@ void main()
 		fprintf(frc, "Bit Error: %ld\n", bit_err);
 		fprintf(frc, "Hamming Error: %ld\n", hamm_err);
 		fprintf(frc, "RR Error: %ld\n", rr_err_cnt);
+#if (1 == GF_CAL_COUNT)		
 		fprintf(frc, "Add Cnt: %ld\n", add_cnt);
 		fprintf(frc, "Mul Cnt: %ld\n", mul_cnt);
 		fprintf(frc, "Div Cnt: %ld\n", div_cnt);
 		fprintf(frc, "RCB Cnt: %ld\n", real_cbm_cnt);
 		fprintf(frc, "RMF Cnt: %ld\n", real_mul_ff_cnt);
 		fprintf(frc, "Pow Cnt: %ld\n", pow_cnt);
+#endif		
 		fprintf(frc, "Uncoded Results: %.10lf %.10lf %.10lf\n", 
 			    (double)uncoded_frame_err / (double)iter,
 			    (double)uncoded_symbol_err / (double)iter / CODEWORD_LEN * BITS_PER_SYMBOL_BPSK,

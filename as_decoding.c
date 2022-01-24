@@ -44,12 +44,18 @@ unsigned char omega[CODEWORD_LEN - MESSAGE_LEN];
 unsigned char sigma[((CODEWORD_LEN - MESSAGE_LEN) + (CODEWORD_LEN - MESSAGE_LEN + 1) - 1) - (CODEWORD_LEN - MESSAGE_LEN)];
 unsigned char erasure_polynomial[CODEWORD_LEN];
 unsigned char phi[CODEWORD_LEN];
-//unsigned char g_term_c[LAYER_NUM][POLY_NUM][TERM_SIZE * TERM_SIZE];
-unsigned long long g_term_x[TERM_SIZE * TERM_SIZE];
-unsigned long long g_term_y[TERM_SIZE * TERM_SIZE];
+//unsigned char g_term_c[LAYER_NUM][POLY_NUM][term_size_x * term_size_y];
+//unsigned long long g_term_x[term_size_x * term_size_y];
+//unsigned long long g_term_y[term_size_x * term_size_y];
+unsigned long long *g_term_x;
+unsigned long long *g_term_y;
+
+unsigned long long term_size_x = 0;
+unsigned long long term_size_y = 0;
+
 #if (0 == RECUR_RR)
-unsigned char g_term_0_y_c[LAYER_NUM][TERM_SIZE * TERM_SIZE];
-unsigned char g_term_x_0_c[LAYER_NUM][TERM_SIZE * TERM_SIZE];
+unsigned char g_term_0_y_c[LAYER_NUM][term_size_x * term_size_y];
+unsigned char g_term_x_0_c[LAYER_NUM][term_size_x * term_size_y];
 unsigned char f_root_val[ROOT_SIZE][ROOT_SIZE];
 unsigned char f_root_prev[ROOT_SIZE][ROOT_SIZE];
 unsigned long long f_root_cnt[ROOT_SIZE + 1];//used for next layer
@@ -68,6 +74,8 @@ unsigned char decoding_ok_flag = 0;
 unsigned long long weight_stored = 0;
 unsigned long long hamm_distance_debug = 0xFFFF;
 unsigned long long rr_err = 0;
+
+unsigned long long max_dx = 0, max_dy = 0;
 
 void find_max_val(float matrix[][CODEWORD_LEN], unsigned long long col,
 					 unsigned char* m_ptr, unsigned char* n_ptr)
@@ -1061,9 +1069,9 @@ int lex_order(unsigned long long **lex_table, unsigned long long d_x, unsigned l
 			{
 				max_degree = tmp_lex_table[i][j];
 			}
-			DEBUG_INFO("%ld ", tmp_lex_table[i][j]);
+			//DEBUG_INFO("%ld ", tmp_lex_table[i][j]);
 		}
-		DEBUG_INFO("\n");
+		//DEBUG_INFO("\n");
 	}
 	DEBUG_INFO("\n");
 
@@ -1085,11 +1093,13 @@ int lex_order(unsigned long long **lex_table, unsigned long long d_x, unsigned l
 				{
 					*((unsigned long long *)lex_table + i * d_y + j) = degree_index;
 					degree_index = degree_index + 1;
-					//DEBUG_INFO("lex_table: %ld %ld\n", degree_index, *((unsigned long long *)lex_table + i * d_y + j));
+					//DEBUG_INFO("lex_table: %ld %ld %ld\n", k, degree_index, *((unsigned long long *)lex_table + i * d_y + j));
 				}
 			}
 		}
 	}
+
+	DEBUG_INFO("ld table OK\n");		
 }
 
 int koetter_interpolation()
@@ -1118,8 +1128,11 @@ int koetter_interpolation()
 
 	//d_x = d_x << LEX_TABLE_EXPAND_SIZE;
 	//d_y = d_y << LEX_TABLE_EXPAND_SIZE;
-	d_x = d_x * LEX_TABLE_EXPAND_SIZE;
-	d_y = d_y * LEX_TABLE_EXPAND_SIZE;
+	//d_x = d_x * LEX_TABLE_EXPAND_SIZE;
+	//d_y = d_y * LEX_TABLE_EXPAND_SIZE / 2;
+	//d_y = d_y + 3;
+	d_x = term_size_x + 1;
+	d_y = term_size_y + 1;
 
 	unsigned long long lex_order_table[d_x][d_y];
 	lex_order((unsigned long long **)lex_order_table, d_x, d_y);
@@ -1131,7 +1144,6 @@ int koetter_interpolation()
 			DEBUG_INFO("%ld ", lex_order_table[i][j]);
 			if(c >= lex_order_table[i][j])
 			{
-				//term_num = term_num + 1;
 #if 0				
 				if(d_x_max < i)
 				{
@@ -1153,6 +1165,7 @@ int koetter_interpolation()
 
 	d_x_max = d_x;
 
+#if 0
 	for(i = 0; i < (d_x + 1); i++)
 	{
 		//for(j = i; j < (d_y_max + 1); j++)
@@ -1161,8 +1174,11 @@ int koetter_interpolation()
 			term_num_real = term_num_real + 1;
 		}
 	}
-	
-	DEBUG_INFO("constraint: %d %d %d %d %d %d\n", c, d_x, d_y, term_num_real, d_x_max, d_y_max);
+#else	
+	term_num_real = (d_x + 0) * (d_y + 0);
+#endif
+
+	DEBUG_INFO("constraint: %d %d %d %d %d %d %d\n", c, d_x, d_y, term_num_real, d_x_max, d_y_max, TERM_SIZE);
 #if 0
 	unsigned char g_table_c[d_y_max + 1][term_num];
 	unsigned char g_table_x[term_num];
@@ -1212,9 +1228,9 @@ int koetter_interpolation()
 
 	/*init (a, b) pairs*/
 	k = 0;
-	for(i = 0; i < (d_x + 1); i++)
+	for(i = 0; i < (d_x + 0); i++)
 	{
-		for(j = 0; j < (d_y + 1); j++)
+		for(j = 0; j < (d_y + 0); j++)
 		{
 			//if(S_MUL > (i + j))
 			{
@@ -1363,7 +1379,7 @@ int koetter_interpolation()
 #if (1 == CFG_DEBUG_NOTICE)						
 						if(0xFF != tmp_sum)
 						{
-							DEBUG_NOTICE("tmp_sum: %x | %x\n", tmp_sum, tmp_ff);
+							DEBUG_NOTICE("tmp_sum: %d | %d\n", tmp_sum, tmp_ff);
 						}
 #endif						
 					}
@@ -1552,6 +1568,17 @@ int koetter_interpolation()
 							{
 								weight_pol[m] = (g_table_x[n] + (MESSAGE_LEN - 1) * g_table_y[n]);
 								lexorder_pol[m] = lex_order_table[g_table_x[n]][g_table_y[n]];
+								if((g_table_x[n] >= d_x)
+									|| (g_table_y[n] >= d_y))
+								{
+									DEBUG_IMPOTANT("lex_order_table_err: %ld | %ld %ld | %ld %ld | %ld\n",
+												   n,
+										           g_table_x[n],
+										           g_table_y[n],
+										           d_x,
+										           d_y,
+										           lexorder_pol[m]);
+								}
 								DEBUG_NOTICE("pol_updating: %d %d\n", weight_pol[m], lexorder_pol[m]);
 							}
 #endif
@@ -1574,9 +1601,22 @@ int koetter_interpolation()
 #if (1 == CFG_DEBUG_NOTICE)						
 						if(0xFF != g_table_c_prev[m][n])
 						{
-							DEBUG_NOTICE("g_table_c_prev: %d | %d %d | %d %d | %x\n", m, lex_order_table[g_table_x[n]][g_table_y[n]], (g_table_x[n] + (MESSAGE_LEN - 1) * g_table_y[n]), g_table_x[n], g_table_y[n], g_table_c_prev[m][n]);
+							DEBUG_NOTICE("g_table_c_prev: %d | %d %d | %d %d | %d\n", m, lex_order_table[g_table_x[n]][g_table_y[n]], (g_table_x[n] + (MESSAGE_LEN - 1) * g_table_y[n]), g_table_x[n], g_table_y[n], g_table_c_prev[m][n]);
 						}
 #endif						
+						if(0xFF != g_table_c_prev[m][n])
+						{
+							if(g_table_x[n] > max_dx)
+							{
+								max_dx = g_table_x[n];
+								//DEBUG_SYS("max_dx: %ld\n", max_dx);
+							}
+							if(g_table_y[n] > max_dy)
+							{
+								max_dy = g_table_y[n];
+								//DEBUG_SYS("max_dy: %ld\n", max_dy);
+							}
+						}
 					}
 				}
 			}
@@ -1612,7 +1652,7 @@ int koetter_interpolation()
 		{
 			if(0xFF != g_table_c[m][n])
 			{
-				for(k = 0; k < (TERM_SIZE * TERM_SIZE); k++)
+				for(k = 0; k < (term_size_x * term_size_y); k++)
 				{
 					if((g_table_x[n] == g_term_x[k])
 						&& (g_table_y[n] == g_term_y[k]))
@@ -1635,7 +1675,8 @@ int koetter_interpolation()
 	{
 		if(0xFF != g_table_c[sml_poly][n])
 		{
-			for(k = 0; k < (TERM_SIZE * TERM_SIZE); k++)
+			DEBUG_IMPOTANT("n: %ld\n", n);
+			for(k = 0; k < (term_size_x * term_size_y); k++)
 			{
 				if((g_table_x[n] == g_term_x[k])
 					&& (g_table_y[n] == g_term_y[k]))
@@ -1648,7 +1689,9 @@ int koetter_interpolation()
 														g_term_c[0][0][k]);
 #else
 					g_term_c_p[g_term_phase][0][k] = g_table_c[sml_poly][n];
-					DEBUG_IMPOTANT("g_term: %d | %d %d | %x\n", sml_poly,
+					DEBUG_IMPOTANT("g_term: %d %d | %d %d | %x\n", 
+														k,
+														sml_poly,
 														g_term_x[k],
 														g_term_y[k],
 														g_term_c_p[g_term_phase][0][k]);
@@ -1662,6 +1705,10 @@ int koetter_interpolation()
 
 	if((S_MUL * (CODEWORD_LEN - err_num)) > weight_pol[sml_poly])
 	{
+		DEBUG_NOTICE("decoding_ok_flag: %d %d %d\n",
+			         decoding_ok_flag,
+			         (S_MUL * (CODEWORD_LEN - err_num)),
+			         weight_pol[sml_poly]);
 		if(0 == decoding_ok_flag)
 		{
 			decoding_ok_flag = 1;
@@ -1702,6 +1749,26 @@ int g_term_malloc()
 {
 	unsigned long long i = 0, j = 0;
 
+	unsigned long long lex_order_table[500][50];
+	lex_order((unsigned long long **)lex_order_table, 500, 50);
+	unsigned long long s_x = 0;
+	for(i = 0; i < 500; i++)
+	{
+		for(j = 0; j < 50; j++)
+		{
+			if(lex_order_table[i][j] < (S_MUL * (S_MUL + 1) / 2 * CODEWORD_LEN))
+			{
+				if(s_x < i)
+				{
+					s_x = i;
+				}
+			}
+		}
+	}
+	term_size_y = (unsigned long long)((S_MUL + 0.5) * sqrt(CODEWORD_LEN / (MESSAGE_LEN - 1))) + 2;
+	term_size_x = s_x + term_size_y * (MESSAGE_LEN + 1) + 2;
+	DEBUG_SYS("term_size: %ld %ld\n", term_size_x, term_size_y);
+
 	g_term_c_p = (unsigned char***)malloc(sizeof(unsigned char**) * LAYER_NUM);
 	for (i = 0; i < LAYER_NUM; i++)
 	{
@@ -1711,7 +1778,7 @@ int g_term_malloc()
 
 		for(j = 0; j < POLY_NUM; j++)
 		{
-			g_term_c_p[i][j] = (unsigned char*)malloc(sizeof(unsigned char) * (TERM_SIZE * TERM_SIZE));
+			g_term_c_p[i][j] = (unsigned char*)malloc(sizeof(unsigned char) * (term_size_x * term_size_y));
 		}
   	}
 	DEBUG_SYS("malloc g_term OK\n");
@@ -1754,10 +1821,10 @@ int g_term_init()
 	{
 		//for(i = 0; i < POLY_NUM; i++)
 #if 0		
-		for(j = 0; j < (TERM_SIZE * TERM_SIZE); j++)
+		for(j = 0; j < (term_size_x * term_size_y); j++)
 		{
 #if 0			
-			//for(j = 0; j < (TERM_SIZE * TERM_SIZE); j++)
+			//for(j = 0; j < (term_size_x * term_size_y); j++)
 			for(i = 0; i < POLY_NUM; i++)
 			{
 				g_term_c[k][i][j] = 0xFF;
@@ -1775,21 +1842,25 @@ int g_term_init()
 #endif
 
 #if (0 == RECUR_RR)
-		memset(g_term_0_y_c[k], 0xFF, sizeof(unsigned char) * (TERM_SIZE * TERM_SIZE));
-		memset(g_term_x_0_c[k], 0xFF, sizeof(unsigned char) * (TERM_SIZE * TERM_SIZE));
+		memset(g_term_0_y_c[k], 0xFF, sizeof(unsigned char) * (term_size_x * term_size_y));
+		memset(g_term_x_0_c[k], 0xFF, sizeof(unsigned char) * (term_size_x * term_size_y));
 #endif
 		for(i = 0; i < POLY_NUM; i++)
 		{
-			memset(g_term_c_p[k][i], 0xFF, sizeof(unsigned char) * (TERM_SIZE * TERM_SIZE));
+			memset(g_term_c_p[k][i], 0xFF, sizeof(unsigned char) * (term_size_x * term_size_y));
 		}
 	}
 	stop = clock();
 	runtime = (stop - start) / 1000.0000;
 	//DEBUG_SYS("Time21: %fs\n", runtime);
+
+	g_term_x = (unsigned long long*)malloc(sizeof(unsigned long long) * (term_size_x * term_size_y));
+	g_term_y = (unsigned long long*)malloc(sizeof(unsigned long long) * (term_size_x * term_size_y));
+	
 	k = 0;
-	for(i = 0; i < TERM_SIZE; i++)
+	for(i = 0; i < term_size_x; i++)
 	{
-		for(j = 0; j < TERM_SIZE; j++)
+		for(j = 0; j < term_size_y; j++)
 		{
 			g_term_x[k] = i;
 			g_term_y[k] = j;
@@ -1835,11 +1906,11 @@ int g_term_new_gen(unsigned long long layer_idx, unsigned long long tern_idx, un
 	unsigned long long i = 0, j = 0, k = 0, l = 0, r = 0, s = 0;
 
 	unsigned char tmp = 0xFF;
-	unsigned char g_term_c_expand[TERM_SIZE * TERM_SIZE];
-	unsigned char tmp_g_term_c_expand[TERM_SIZE * TERM_SIZE];
-	unsigned char mul_g_term_c_expand[TERM_SIZE * TERM_SIZE];
-	unsigned char g_term_c_expand_store[TERM_SIZE * TERM_SIZE];
-	for(k = 0; k < (TERM_SIZE * TERM_SIZE); k++)
+	unsigned char g_term_c_expand[term_size_x * term_size_y];
+	unsigned char tmp_g_term_c_expand[term_size_x * term_size_y];
+	unsigned char mul_g_term_c_expand[term_size_x * term_size_y];
+	unsigned char g_term_c_expand_store[term_size_x * term_size_y];
+	for(k = 0; k < (term_size_x * term_size_y); k++)
 	{
 #if 0		
 		if((1 == g_term_x[k])
@@ -1906,7 +1977,7 @@ int g_term_new_gen(unsigned long long layer_idx, unsigned long long tern_idx, un
 #endif
 	}
 
-	for(k = 0; k < (TERM_SIZE * TERM_SIZE); k++)//for every term contain "y"
+	for(k = 0; k < (term_size_x * term_size_y); k++)//for every term contain "y"
 	{
 		if(0 == k)
 		{
@@ -1964,7 +2035,7 @@ int g_term_new_gen(unsigned long long layer_idx, unsigned long long tern_idx, un
 			for(l = 0; l < (g_term_y[k] - 0); l++)//for pow_cal, g*m => tmp
 			{
 				//DEBUG_NOTICE("*********************\n");
-				for(i = 0; i < (TERM_SIZE * TERM_SIZE); i++)//for every a
+				for(i = 0; i < (term_size_x * term_size_y); i++)//for every a
 				{
 					if(0 == i)
 					{
@@ -1988,7 +2059,7 @@ int g_term_new_gen(unsigned long long layer_idx, unsigned long long tern_idx, un
 					    g_term_y[i],
 					    g_term_c_expand[i]);
 
-						for(j = 0; j < (TERM_SIZE * TERM_SIZE); j++)//for every b
+						for(j = 0; j < (term_size_x * term_size_y); j++)//for every b
 						{
 							if(0xFF != mul_g_term_c_expand[j])
 							{
@@ -1997,7 +2068,7 @@ int g_term_new_gen(unsigned long long layer_idx, unsigned long long tern_idx, un
 							    g_term_y[j],
 							    mul_g_term_c_expand[j]);
 
-								for(r = 0; r < (TERM_SIZE * TERM_SIZE); r++)//find the place
+								for(r = 0; r < (term_size_x * term_size_y); r++)//find the place
 								{
 									if(((g_term_x[i] + g_term_x[j]) == g_term_x[r])
 										&& ((g_term_y[i] + g_term_y[j]) == g_term_y[r]))//r <= place(i, j)
@@ -2016,7 +2087,7 @@ int g_term_new_gen(unsigned long long layer_idx, unsigned long long tern_idx, un
 				}
 
 				/*after every mulp cal, copy and clear*/
-				for(r = 0; r < (TERM_SIZE * TERM_SIZE); r++)
+				for(r = 0; r < (term_size_x * term_size_y); r++)
 				{
 					g_term_c_expand[r] = tmp_g_term_c_expand[r];
 					tmp_g_term_c_expand[r] = 0xFF;
@@ -2032,11 +2103,11 @@ int g_term_new_gen(unsigned long long layer_idx, unsigned long long tern_idx, un
 				}
 			}
 
-			for(r = 0; r < (TERM_SIZE * TERM_SIZE); r++)
+			for(r = 0; r < (term_size_x * term_size_y); r++)
 			{
 				if(0xFF != g_term_c_expand[r])
 				{
-					for(s = 0; s < (TERM_SIZE * TERM_SIZE); s++)
+					for(s = 0; s < (term_size_x * term_size_y); s++)
 					{
 						if(((g_term_x[r] + g_term_x[k]) == g_term_x[s])
 						&& (g_term_y[r] == g_term_y[s]))
@@ -2071,7 +2142,7 @@ int g_term_new_gen(unsigned long long layer_idx, unsigned long long tern_idx, un
 				}
 			}
 
-			for(r = 0; r < (TERM_SIZE * TERM_SIZE); r++)
+			for(r = 0; r < (term_size_x * term_size_y); r++)
 			{
 #if 0		
 				if((1 == g_term_x[r])
@@ -2124,7 +2195,7 @@ int g_term_new_gen(unsigned long long layer_idx, unsigned long long tern_idx, un
 
 	DEBUG_NOTICE("*********************\n");
 	/*update g_term*/
-	for(r = 0; r < (TERM_SIZE * TERM_SIZE); r++)
+	for(r = 0; r < (term_size_x * term_size_y); r++)
 	{
 #if 0
 		if((0 != g_term_y[r])
@@ -2161,7 +2232,7 @@ int g_term_new_gen(unsigned long long layer_idx, unsigned long long tern_idx, un
 	DEBUG_NOTICE("*********************\n");
 	/*eliminate common factor*/
 	unsigned char cmn_factor = 0xFF;//deal with x
-	for(r = 0; r < (TERM_SIZE * TERM_SIZE); r++)
+	for(r = 0; r < (term_size_x * term_size_y); r++)
 	{
 #if 0		
 		if(0xFF != g_term_c[layer_idx + 1][tern_idx][r])
@@ -2178,7 +2249,7 @@ int g_term_new_gen(unsigned long long layer_idx, unsigned long long tern_idx, un
 	DEBUG_NOTICE("cmn_factor for x: %d\n", cmn_factor);
 	if(0 != cmn_factor)
 	{
-		for(r = 0; r < (TERM_SIZE * TERM_SIZE); r++)
+		for(r = 0; r < (term_size_x * term_size_y); r++)
 		{
 #if 0
 			if(0xFF != g_term_c[layer_idx + 1][tern_idx][r])
@@ -2186,7 +2257,7 @@ int g_term_new_gen(unsigned long long layer_idx, unsigned long long tern_idx, un
 			if(0xFF != g_term_c_p[phase_trans(g_term_phase)][tern_idx][r])
 #endif
 			{
-				for(s = 0; s < (TERM_SIZE * TERM_SIZE); s++)
+				for(s = 0; s < (term_size_x * term_size_y); s++)
 				{
 					if((g_term_x[s] == (g_term_x[r] - cmn_factor))
 						&& (g_term_y[s] == g_term_y[r]))
@@ -2216,7 +2287,7 @@ int g_term_new_gen(unsigned long long layer_idx, unsigned long long tern_idx, un
 	}
 #if 0//you cannot deal with y, since y may be 0
 	cmn_factor = 0xFF;//deal with y
-	for(r = 0; r < (TERM_SIZE * TERM_SIZE); r++)
+	for(r = 0; r < (term_size_x * term_size_y); r++)
 	{
 		if(0xFF != g_term_c[tern_idx][r])
 		{
@@ -2229,11 +2300,11 @@ int g_term_new_gen(unsigned long long layer_idx, unsigned long long tern_idx, un
 	DEBUG_NOTICE("cmn_factor for y: %d\n", cmn_factor);
 	if(0 != cmn_factor)
 	{
-		for(r = 0; r < (TERM_SIZE * TERM_SIZE); r++)
+		for(r = 0; r < (term_size_x * term_size_y); r++)
 		{
 			if(0xFF != g_term_c[tern_idx][r])
 			{
-				for(s = 0; s < (TERM_SIZE * TERM_SIZE); s++)
+				for(s = 0; s < (term_size_x * term_size_y); s++)
 				{
 					if((g_term_y[s] == (g_term_y[r] - cmn_factor))
 						&& (g_term_x[s] == g_term_x[r]))
@@ -2255,7 +2326,7 @@ int g_term_new_gen(unsigned long long layer_idx, unsigned long long tern_idx, un
 
 #if (1 == CFG_DEBUG_NOTICE)
 	DEBUG_NOTICE("*********************\n");
-	for(r = 0; r < (TERM_SIZE * TERM_SIZE); r++)
+	for(r = 0; r < (term_size_x * term_size_y); r++)
 	{
 #if 0
 		if(0xFF != g_term_c[layer_idx + 1][tern_idx][r])
@@ -2290,7 +2361,7 @@ int g_term_0_y_cal(unsigned long long layer_idx, unsigned long long tern_idx)
 	/*clear*/
 	for(i = 0; i < POLY_NUM; i++)
 	{
-		for(j = 0; j < (TERM_SIZE * TERM_SIZE); j++)
+		for(j = 0; j < (term_size_x * term_size_y); j++)
 		{
 			g_term_0_y_c[i][j] = 0xFF;
 		}
@@ -2298,7 +2369,7 @@ int g_term_0_y_cal(unsigned long long layer_idx, unsigned long long tern_idx)
 
 	for(i = 0; i < POLY_NUM; i++)
 	{
-		for(j = 0; j < (TERM_SIZE * TERM_SIZE); j++)
+		for(j = 0; j < (term_size_x * term_size_y); j++)
 		{
 			if((0 != g_term_x[j])
 				&& (0xFF != g_term_c[i][j]))
@@ -2328,16 +2399,16 @@ int g_term_0_y_cal(unsigned long long layer_idx, unsigned long long tern_idx)
 #else
 	/*clear*/
 #if 0
-	for(j = 0; j < (TERM_SIZE * TERM_SIZE); j++)
+	for(j = 0; j < (term_size_x * term_size_y); j++)
 	{
 		//DEBUG_INFO("layer_idx: %ld, j: %ld\n", layer_idx, j);
 		g_term_0_y_c[layer_idx][j] = 0xFF;
 	}
 #else
-	memset(g_term_0_y_c[layer_idx], 0xFF, sizeof(unsigned char) * (TERM_SIZE * TERM_SIZE));
+	memset(g_term_0_y_c[layer_idx], 0xFF, sizeof(unsigned char) * (term_size_x * term_size_y));
 #endif
 
-	for(j = 0; j < (TERM_SIZE * TERM_SIZE); j++)
+	for(j = 0; j < (term_size_x * term_size_y); j++)
 	{
 		if(0 == j)
 		{
@@ -2403,15 +2474,15 @@ unsigned char g_term_x_0_cal(unsigned long long layer_idx, unsigned long long te
 
 	/*clear*/
 #if 0	
-	for(j = 0; j < (TERM_SIZE * TERM_SIZE); j++)
+	for(j = 0; j < (term_size_x * term_size_y); j++)
 	{
 		g_term_x_0_c[layer_idx][j] = 0xFF;
 	}
 #else
-	memset(g_term_x_0_c[layer_idx], 0xFF, sizeof(unsigned char) * (TERM_SIZE * TERM_SIZE));
+	memset(g_term_x_0_c[layer_idx], 0xFF, sizeof(unsigned char) * (term_size_x * term_size_y));
 #endif
 
-	for(j = 0; j < (TERM_SIZE * TERM_SIZE); j++)
+	for(j = 0; j < (term_size_x * term_size_y); j++)
 	{
 		if((0 != g_term_y[j])
 #if 0
@@ -2461,7 +2532,7 @@ int chien_searching_for_g_0_y(unsigned long long layer_idx, unsigned long long t
 	unsigned long long k = 0;
 	unsigned char tmp = 0xFF, tmp_sum = 0xFF;
 	
-	for(k = 0; k < (TERM_SIZE * TERM_SIZE); k++)
+	for(k = 0; k < (term_size_x * term_size_y); k++)
 	{
 		if(0xFF != g_term_0_y_c[layer_idx][k])
 		{
@@ -2678,7 +2749,7 @@ int chien_searching_for_g_0_y_recur(unsigned char *g_c_in, unsigned char root_te
 	unsigned long long k = 0;
 	unsigned char tmp = 0xFF, tmp_sum = 0xFF;
 	
-	for(k = 0; k < (TERM_SIZE * TERM_SIZE); k++)
+	for(k = 0; k < (term_size_x * term_size_y); k++)
 	{
 		if(0xFF != g_c_in[k])
 		{
@@ -2710,9 +2781,9 @@ int g_term_0_y_cal_recur(unsigned char *g_c_in, unsigned char *g_c_out)
 	unsigned long long i = 0, j = 0;
 
 	/*clear*/
-	memset(g_c_out, 0xFF, sizeof(unsigned char) * (TERM_SIZE * TERM_SIZE));
+	memset(g_c_out, 0xFF, sizeof(unsigned char) * (term_size_x * term_size_y));
 
-	for(j = 0; j < (TERM_SIZE * TERM_SIZE); j++)
+	for(j = 0; j < (term_size_x * term_size_y); j++)
 	{	
 		if((0 != g_term_x[j])
 			&& (0xFF != g_c_in[j]))
@@ -2749,10 +2820,10 @@ unsigned char g_term_x_0_cal_recur(unsigned char *g_c_in)
 	unsigned char val = 0xFF;
 	unsigned long long j = 0;
 
-	unsigned char g_c_x_0[TERM_SIZE * TERM_SIZE];
-	memset(g_c_x_0, 0xFF, sizeof(unsigned char) * (TERM_SIZE * TERM_SIZE));
+	unsigned char g_c_x_0[term_size_x * term_size_y];
+	memset(g_c_x_0, 0xFF, sizeof(unsigned char) * (term_size_x * term_size_y));
 
-	for(j = 0; j < (TERM_SIZE * TERM_SIZE); j++)
+	for(j = 0; j < (term_size_x * term_size_y); j++)
 	{
 		if((0 != g_term_y[j])
 			&& (0xFF != g_c_in[j]))
@@ -2775,12 +2846,12 @@ int g_term_new_gen_recur(unsigned char *g_c_in, unsigned char root_insert)
 	unsigned long long i = 0, j = 0, k = 0, l = 0, r = 0, s = 0;
 
 	unsigned char tmp = 0xFF;
-	unsigned char g_term_c_expand[TERM_SIZE * TERM_SIZE];
-	unsigned char tmp_g_term_c_expand[TERM_SIZE * TERM_SIZE];
-	unsigned char mul_g_term_c_expand[TERM_SIZE * TERM_SIZE];
-	unsigned char g_term_c_expand_store[TERM_SIZE * TERM_SIZE];
+	unsigned char g_term_c_expand[term_size_x * term_size_y];
+	unsigned char tmp_g_term_c_expand[term_size_x * term_size_y];
+	unsigned char mul_g_term_c_expand[term_size_x * term_size_y];
+	unsigned char g_term_c_expand_store[term_size_x * term_size_y];
 
-	for(k = 0; k < (TERM_SIZE * TERM_SIZE); k++)
+	for(k = 0; k < (term_size_x * term_size_y); k++)
 	{
 		if((1 == g_term_x[k])
 			&& (1 == g_term_y[k]))
@@ -2813,7 +2884,7 @@ int g_term_new_gen_recur(unsigned char *g_c_in, unsigned char root_insert)
 		tmp_g_term_c_expand[k] = 0xFF;
 	}
 
-	for(k = 0; k < (TERM_SIZE * TERM_SIZE); k++)//for every term contain "y"
+	for(k = 0; k < (term_size_x * term_size_y); k++)//for every term contain "y"
 	{		
 		if((0 != g_term_y[k])			
 			&& (0xFF != g_c_in[k]))	
@@ -2828,7 +2899,7 @@ int g_term_new_gen_recur(unsigned char *g_c_in, unsigned char root_insert)
 			for(l = 0; l < g_term_y[k]; l++)//for pow_cal, g*m => tmp
 			{
 				//DEBUG_NOTICE("*********************\n");
-				for(i = 0; i < (TERM_SIZE * TERM_SIZE); i++)//for every a
+				for(i = 0; i < (term_size_x * term_size_y); i++)//for every a
 				{
 					
 					if(0xFF != g_term_c_expand[i])
@@ -2839,7 +2910,7 @@ int g_term_new_gen_recur(unsigned char *g_c_in, unsigned char root_insert)
 					    g_term_y[i],
 					    g_term_c_expand[i]);
 
-						for(j = 0; j < (TERM_SIZE * TERM_SIZE); j++)//for every b
+						for(j = 0; j < (term_size_x * term_size_y); j++)//for every b
 						{
 							if(0xFF != mul_g_term_c_expand[j])
 							{
@@ -2848,7 +2919,7 @@ int g_term_new_gen_recur(unsigned char *g_c_in, unsigned char root_insert)
 							    g_term_y[j],
 							    mul_g_term_c_expand[j]);
 
-								for(r = 0; r < (TERM_SIZE * TERM_SIZE); r++)//find the place
+								for(r = 0; r < (term_size_x * term_size_y); r++)//find the place
 								{
 									if(((g_term_x[i] + g_term_x[j]) == g_term_x[r])
 										&& ((g_term_y[i] + g_term_y[j]) == g_term_y[r]))//r <= place(i, j)
@@ -2867,7 +2938,7 @@ int g_term_new_gen_recur(unsigned char *g_c_in, unsigned char root_insert)
 				}
 
 				/*after every mulp cal, copy and clear*/
-				for(r = 0; r < (TERM_SIZE * TERM_SIZE); r++)
+				for(r = 0; r < (term_size_x * term_size_y); r++)
 				{
 					g_term_c_expand[r] = tmp_g_term_c_expand[r];
 					tmp_g_term_c_expand[r] = 0xFF;
@@ -2879,15 +2950,15 @@ int g_term_new_gen_recur(unsigned char *g_c_in, unsigned char root_insert)
 							    g_term_y[r],
 							    g_term_c_expand[r]);
 					}
-#endif					
+#endif
 				}
 			}
 
-			for(r = 0; r < (TERM_SIZE * TERM_SIZE); r++)
+			for(r = 0; r < (term_size_x * term_size_y); r++)
 			{
 				if(0xFF != g_term_c_expand[r])
 				{
-					for(s = 0; s < (TERM_SIZE * TERM_SIZE); s++)
+					for(s = 0; s < (term_size_x * term_size_y); s++)
 					{
 						if(((g_term_x[r] + g_term_x[k]) == g_term_x[s])
 						&& (g_term_y[r] == g_term_y[s]))
@@ -2912,7 +2983,7 @@ int g_term_new_gen_recur(unsigned char *g_c_in, unsigned char root_insert)
 				}
 			}
 
-			for(r = 0; r < (TERM_SIZE * TERM_SIZE); r++)
+			for(r = 0; r < (term_size_x * term_size_y); r++)
 			{
 				if((1 == g_term_x[r])
 					&& (1 == g_term_y[r]))
@@ -2941,7 +3012,7 @@ int g_term_new_gen_recur(unsigned char *g_c_in, unsigned char root_insert)
 
 	DEBUG_NOTICE("*********************\n");
 	/*update g_term*/
-	for(r = 0; r < (TERM_SIZE * TERM_SIZE); r++)
+	for(r = 0; r < (term_size_x * term_size_y); r++)
 	{
 		g_c_in[r] = gf_add(g_term_c_expand_store[r], g_c_in[r]);
 #if (1 == CFG_DEBUG_NOTICE)
@@ -2959,7 +3030,7 @@ int g_term_new_gen_recur(unsigned char *g_c_in, unsigned char root_insert)
 	DEBUG_NOTICE("*********************\n");
 	/*eliminate common factor*/
 	unsigned char cmn_factor = 0xFF;//deal with x
-	for(r = 0; r < (TERM_SIZE * TERM_SIZE); r++)
+	for(r = 0; r < (term_size_x * term_size_y); r++)
 	{
 		if(0xFF != g_c_in[r])
 		{
@@ -2972,11 +3043,11 @@ int g_term_new_gen_recur(unsigned char *g_c_in, unsigned char root_insert)
 	DEBUG_NOTICE("cmn_factor for x: %d\n", cmn_factor);
 	if(0 != cmn_factor)
 	{
-		for(r = 0; r < (TERM_SIZE * TERM_SIZE); r++)
+		for(r = 0; r < (term_size_x * term_size_y); r++)
 		{
 			if(0xFF != g_c_in[r])
 			{
-				for(s = 0; s < (TERM_SIZE * TERM_SIZE); s++)
+				for(s = 0; s < (term_size_x * term_size_y); s++)
 				{
 					if((g_term_x[s] == (g_term_x[r] - cmn_factor))
 						&& (g_term_y[s] == g_term_y[r]))
@@ -2997,7 +3068,7 @@ int g_term_new_gen_recur(unsigned char *g_c_in, unsigned char root_insert)
 
 #if (1 == CFG_DEBUG_NOTICE)
 	DEBUG_NOTICE("*********************\n");
-	for(r = 0; r < (TERM_SIZE * TERM_SIZE); r++)
+	for(r = 0; r < (term_size_x * term_size_y); r++)
 	{
 		if(0xFF != g_c_in[r])
 		{
@@ -3163,12 +3234,16 @@ int dfs_rr_recur(unsigned char *g_c_q,
 	long long is_root = 0;
 	unsigned char root = 0xFF;
 
+#if (1 == DYNAMIC_MEM)
 	unsigned char *g_c_q_new;
-	g_c_q_new = (unsigned char*)malloc(sizeof(unsigned char) * (TERM_SIZE * TERM_SIZE));
+	g_c_q_new = (unsigned char*)malloc(sizeof(unsigned char) * (term_size_x * term_size_y));
+#else
+	unsigned char g_c_q_new[term_size_x * term_size_y];
+#endif
 
 	for(i = 0; i < GF_FIELD; i++)//test roots
 	{
-		memcpy(g_c_q_new, g_c_q, sizeof(unsigned char) * (TERM_SIZE * TERM_SIZE));
+		memcpy(g_c_q_new, g_c_q, sizeof(unsigned char) * (term_size_x * term_size_y));
 		g_term_0_y_cal_recur(g_c_q_new, g_c_0_y);
 
 		is_root = chien_searching_for_g_0_y_recur(g_c_0_y, power_polynomial_table[i][0]);
@@ -3187,8 +3262,10 @@ int dfs_rr_recur(unsigned char *g_c_q,
 		}
 	}
 
+#if (1 == DYNAMIC_MEM)
 	free(g_c_q_new);
 	g_c_q_new = NULL;
+#endif	
 	
 	return 0;
 }
@@ -3202,13 +3279,18 @@ int rr_factorization_recur()
 	long long is_root = 0;
 	unsigned char root = 0xFF;
 
+#if (1 == DYNAMIC_MEM)
 	unsigned char *g_c_q, *g_c_0_y;
-	g_c_q = (unsigned char*)malloc(sizeof(unsigned char) * (TERM_SIZE * TERM_SIZE));
-	g_c_0_y = (unsigned char*)malloc(sizeof(unsigned char) * (TERM_SIZE * TERM_SIZE));
+	g_c_q = (unsigned char*)malloc(sizeof(unsigned char) * (term_size_x * term_size_y));
+	g_c_0_y = (unsigned char*)malloc(sizeof(unsigned char) * (term_size_x * term_size_y));
+#else
+	unsigned char g_c_q[term_size_x * term_size_y], g_c_0_y[term_size_x * term_size_y];
+#endif
 
 	for(i = 0; i < GF_FIELD; i++)//test roots
 	{
-		memcpy(g_c_q, g_term_c_p[g_term_phase][0], sizeof(unsigned char) * (TERM_SIZE * TERM_SIZE));
+		//DEBUG_INFO("root_test: %ld\n", i);
+		memcpy(g_c_q, g_term_c_p[g_term_phase][0], sizeof(unsigned char) * (term_size_x * term_size_y));
 		g_term_0_y_cal_recur(g_c_q, g_c_0_y);
 
 		is_root = chien_searching_for_g_0_y_recur(g_c_0_y, power_polynomial_table[i][0]);
@@ -3227,11 +3309,13 @@ int rr_factorization_recur()
 		}
 	}
 
+#if (1 == DYNAMIC_MEM)
 	free(g_c_q);
 	g_c_q = NULL;
 	free(g_c_0_y);
 	g_c_0_y = NULL;
-	
+#endif
+
 	return 0;
 }
 
@@ -3340,6 +3424,8 @@ int as_decoding()
 	DEBUG_IMPOTANT("\n");
 #endif
 
+	//DEBUG_SYS("TERM_SIZE: %ld %ld\n", term_size_x, term_size_y);
+
 	clock_t start, stop;
 	float runtime;
 	start = clock();
@@ -3349,7 +3435,7 @@ int as_decoding()
 
 	stop = clock();
 	runtime = (stop - start) / 1000.0000;
-	//BUG_SYS("Time1 %fs\n", runtime);
+	//DEBUG_SYS("Time1 %fs\n", runtime);
 
 	g_term_init();
 
@@ -3370,7 +3456,7 @@ int as_decoding()
 
 	stop = clock();
 	runtime = (stop - start) / 1000.0000;
-	//BUG_SYS("Time3 %fs\n", runtime);
+	//DEBUG_SYS("Time3 %fs\n", runtime);
 
 #if (1 == RECUR_RR)
 	rr_factorization_recur();
@@ -3385,11 +3471,16 @@ int as_decoding()
 #endif
 	stop = clock();
 	runtime = (stop - start) / 1000.0000;
-	//BUG_SYS("Time5 %fs\n", runtime);
+	//DEBUG_SYS("Time5 %fs\n", runtime);
 
 #if (1 == RE_ENCODING)
 	recover_codeword();
 #endif
+
+	free(g_term_x);
+	g_term_x = NULL;
+	free(g_term_y);
+	g_term_y = NULL;
 
 	return 0;
 }

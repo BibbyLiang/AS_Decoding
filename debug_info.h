@@ -9,7 +9,7 @@
 #if (1 == TEST_MODE)
 #define CFG_DEBUG_IMPOTANT		1
 #define CFG_DEBUG_INFO			1
-#define CFG_DEBUG_NOTICE		1
+#define CFG_DEBUG_NOTICE		0
 #else
 #define CFG_DEBUG_IMPOTANT		0
 #define CFG_DEBUG_INFO			0

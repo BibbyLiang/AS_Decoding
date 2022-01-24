@@ -2,6 +2,7 @@
 #include <string.h>
 #include "debug_info.h"
 #include "gf_cal.h"
+#include "as_decoding.h"
 
 #if (3 == GF_Q)
 unsigned char power_polynomial_table[GF_FIELD][2] = 
@@ -379,12 +380,28 @@ unsigned char power_polynomial_table[GF_FIELD][2] =
 };
 #endif
 
+//#if (1 == GF_CAL_COUNT)
 unsigned long long add_cnt = 0;
 unsigned long long mul_cnt = 0;
 unsigned long long div_cnt = 0;
 unsigned long long real_cbm_cnt = 0;
 unsigned long long real_mul_ff_cnt = 0;
 unsigned long long pow_cnt = 0;
+unsigned long long add_cnt_prev = 0;
+unsigned long long mul_cnt_prev = 0;
+unsigned long long div_cnt_prev = 0;
+unsigned long long real_cbm_cnt_prev = 0;
+unsigned long long real_mul_ff_cnt_prev = 0;
+unsigned long long pow_cnt_prev = 0;
+/*redundant in fact*/
+unsigned long long err_hist[CODEWORD_LEN - MESSAGE_LEN - 1];
+unsigned long long add_cnt_hist[CODEWORD_LEN - MESSAGE_LEN - 1];
+unsigned long long mul_cnt_hist[CODEWORD_LEN - MESSAGE_LEN - 1];
+unsigned long long div_cnt_hist[CODEWORD_LEN - MESSAGE_LEN - 1];
+unsigned long long real_cbm_cnt_hist[CODEWORD_LEN - MESSAGE_LEN - 1];
+unsigned long long real_mul_ff_cnt_hist[CODEWORD_LEN - MESSAGE_LEN - 1];
+unsigned long long pow_cnt_hist[CODEWORD_LEN - MESSAGE_LEN - 1];
+//#endif
 
 unsigned char gf_pow2poly(unsigned char val_in_pow)
 {
@@ -788,3 +805,38 @@ unsigned char phase_trans(unsigned char phase)
 
 	return val;
 }
+
+#if (1 == GF_CAL_COUNT)
+int gf_count_hist(unsigned long long err_cnt)
+{
+	if(err_num < (CODEWORD_LEN - MESSAGE_LEN - 1))
+	{
+		err_hist[err_num]++;
+		add_cnt_hist[err_num] = add_cnt_hist[err_num] + add_cnt - add_cnt_prev;
+		mul_cnt_hist[err_num] = mul_cnt_hist[err_num] + mul_cnt - mul_cnt_prev;;
+		div_cnt_hist[err_num] = div_cnt_hist[err_num] + div_cnt - div_cnt_prev;;
+		real_cbm_cnt_hist[err_num] = real_cbm_cnt_hist[err_num] + real_cbm_cnt - real_cbm_cnt_prev;;
+		real_mul_ff_cnt_hist[err_num] = real_mul_ff_cnt_hist[err_num] + real_mul_ff_cnt - real_mul_ff_cnt_prev;;
+		pow_cnt_hist[err_num] = pow_cnt_hist[err_num] + pow_cnt - pow_cnt_prev;;
+	}
+	else
+	{
+		err_hist[CODEWORD_LEN - MESSAGE_LEN - 2]++;
+		add_cnt_hist[CODEWORD_LEN - MESSAGE_LEN - 2] = add_cnt_hist[CODEWORD_LEN - MESSAGE_LEN - 2] + add_cnt - add_cnt_prev;
+		mul_cnt_hist[CODEWORD_LEN - MESSAGE_LEN - 2] = mul_cnt_hist[CODEWORD_LEN - MESSAGE_LEN - 2] + mul_cnt - mul_cnt_prev;;
+		div_cnt_hist[CODEWORD_LEN - MESSAGE_LEN - 2] = div_cnt_hist[CODEWORD_LEN - MESSAGE_LEN - 2] + div_cnt - div_cnt_prev;;
+		real_cbm_cnt_hist[CODEWORD_LEN - MESSAGE_LEN - 2] = real_cbm_cnt_hist[CODEWORD_LEN - MESSAGE_LEN - 2] + real_cbm_cnt - real_cbm_cnt_prev;;
+		real_mul_ff_cnt_hist[CODEWORD_LEN - MESSAGE_LEN - 2] = real_mul_ff_cnt_hist[CODEWORD_LEN - MESSAGE_LEN - 2] + real_mul_ff_cnt - real_mul_ff_cnt_prev;;
+		pow_cnt_hist[CODEWORD_LEN - MESSAGE_LEN - 2] = pow_cnt_hist[CODEWORD_LEN - MESSAGE_LEN - 2] + pow_cnt - pow_cnt_prev;;
+	}
+
+	add_cnt_prev = add_cnt;
+	mul_cnt_prev = mul_cnt;
+	div_cnt_prev = div_cnt;
+	real_cbm_cnt_prev = real_cbm_cnt;
+	real_mul_ff_cnt_prev = real_mul_ff_cnt;
+	pow_cnt_prev = pow_cnt;
+	
+	return 0;
+}
+#endif
