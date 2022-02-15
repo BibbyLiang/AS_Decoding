@@ -1,6 +1,8 @@
 #ifndef MOD_H
 #define MOD_H
 
+#include "cfg_decoding.h"
+
 #define BITS_PER_SYMBOL_BPSK	1
 
 extern float **recv_seq;

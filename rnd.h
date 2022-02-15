@@ -1,6 +1,8 @@
 #ifndef RND_H
 #define RND_H
 
+#include "cfg_decoding.h"
+
 #define PI			3.1415926536
 #define N 			624
 #define M 			397

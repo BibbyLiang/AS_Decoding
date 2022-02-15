@@ -5,7 +5,9 @@
 #include "rnd.h"
 #include "math.h"
 
-float awgn_gen(float eb2n0)
+float eb2n0 = 15;
+
+float awgn_gen(float eb2n0_snr)
 {
 	float val = 0;
 
@@ -20,7 +22,7 @@ float awgn_gen(float eb2n0)
 
 #if 1
 	r = gaussrand();
-	val = r * (sqrt((E_B / ((float)MESSAGE_LEN / (float)CODEWORD_LEN)) / pow(10, eb2n0 / 10) / 2));
+	val = r * (sqrt((E_B / ((float)MESSAGE_LEN / (float)CODEWORD_LEN)) / pow(10, eb2n0_snr / 10) / 2));
 #else
 	r = sqrt(2.0 * log(1.0 / (1.0 - w)));
 
@@ -36,6 +38,7 @@ float awgn_gen(float eb2n0)
 	DEBUG_NOTICE("gauss_val: %f\n", val);
 
 #if 0
+#if (1 == OUTPUT_LOG)
 	FILE *frc;
 	frc = fopen("gauss.txt", "a+");
 	fprintf(frc, "%f\n", val);
@@ -46,6 +49,7 @@ float awgn_gen(float eb2n0)
 	fprintf(frc1, "%f\n", r);
 	fclose(frc1);
 	frc1 = NULL;
+#endif	
 #endif
 	return val;
 }

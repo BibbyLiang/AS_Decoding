@@ -10,8 +10,8 @@ float recv_rel[CODEWORD_LEN];
 
 int mod_init()
 {
-	unsigned long long i = 0;
-	unsigned long long symbol_num = CODEWORD_LEN * GF_Q * BITS_PER_SYMBOL_BPSK;
+	long long i = 0;
+	long long symbol_num = CODEWORD_LEN * GF_Q * BITS_PER_SYMBOL_BPSK;
 
 	recv_seq = (float**)malloc(sizeof(float*) * symbol_num);
 	for (i = 0; i < symbol_num; i++)
@@ -26,8 +26,8 @@ int mod_init()
 
 int mod_exit()
 {
-	unsigned long long i = 0;
-	unsigned long long symbol_num = CODEWORD_LEN * GF_Q * BITS_PER_SYMBOL_BPSK;
+	long long i = 0;
+	long long symbol_num = CODEWORD_LEN * GF_Q * BITS_PER_SYMBOL_BPSK;
 
 	for (i = 0; i < symbol_num; i++)
 	{

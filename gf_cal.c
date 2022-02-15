@@ -380,28 +380,28 @@ unsigned char power_polynomial_table[GF_FIELD][2] =
 };
 #endif
 
-//#if (1 == GF_CAL_COUNT)
-unsigned long long add_cnt = 0;
-unsigned long long mul_cnt = 0;
-unsigned long long div_cnt = 0;
-unsigned long long real_cbm_cnt = 0;
-unsigned long long real_mul_ff_cnt = 0;
-unsigned long long pow_cnt = 0;
-unsigned long long add_cnt_prev = 0;
-unsigned long long mul_cnt_prev = 0;
-unsigned long long div_cnt_prev = 0;
-unsigned long long real_cbm_cnt_prev = 0;
-unsigned long long real_mul_ff_cnt_prev = 0;
-unsigned long long pow_cnt_prev = 0;
+#if (1 == GF_CAL_COUNT)
+long long add_cnt = 0;
+long long mul_cnt = 0;
+long long div_cnt = 0;
+long long real_cbm_cnt = 0;
+long long real_mul_ff_cnt = 0;
+long long pow_cnt = 0;
+long long add_cnt_prev = 0;
+long long mul_cnt_prev = 0;
+long long div_cnt_prev = 0;
+long long real_cbm_cnt_prev = 0;
+long long real_mul_ff_cnt_prev = 0;
+long long pow_cnt_prev = 0;
 /*redundant in fact*/
-unsigned long long err_hist[CODEWORD_LEN - MESSAGE_LEN - 1];
-unsigned long long add_cnt_hist[CODEWORD_LEN - MESSAGE_LEN - 1];
-unsigned long long mul_cnt_hist[CODEWORD_LEN - MESSAGE_LEN - 1];
-unsigned long long div_cnt_hist[CODEWORD_LEN - MESSAGE_LEN - 1];
-unsigned long long real_cbm_cnt_hist[CODEWORD_LEN - MESSAGE_LEN - 1];
-unsigned long long real_mul_ff_cnt_hist[CODEWORD_LEN - MESSAGE_LEN - 1];
-unsigned long long pow_cnt_hist[CODEWORD_LEN - MESSAGE_LEN - 1];
-//#endif
+long long err_hist[CODEWORD_LEN - MESSAGE_LEN - 1];
+long long add_cnt_hist[CODEWORD_LEN - MESSAGE_LEN - 1];
+long long mul_cnt_hist[CODEWORD_LEN - MESSAGE_LEN - 1];
+long long div_cnt_hist[CODEWORD_LEN - MESSAGE_LEN - 1];
+long long real_cbm_cnt_hist[CODEWORD_LEN - MESSAGE_LEN - 1];
+long long real_mul_ff_cnt_hist[CODEWORD_LEN - MESSAGE_LEN - 1];
+long long pow_cnt_hist[CODEWORD_LEN - MESSAGE_LEN - 1];
+#endif
 
 unsigned char gf_pow2poly(unsigned char val_in_pow)
 {
@@ -451,8 +451,9 @@ unsigned char gf_location(unsigned char val)
 
 unsigned char gf_add(unsigned char a, unsigned char b)
 {
+#if (1 == GF_CAL_COUNT)	
 	add_cnt++;
-	
+#endif
 	unsigned char i = 0;
 	unsigned char sum_in_pow = 0;
 	
@@ -470,8 +471,9 @@ unsigned char gf_add(unsigned char a, unsigned char b)
 
 unsigned char gf_multp(unsigned char a, unsigned char b)
 {
+#if (1 == GF_CAL_COUNT)	
 	mul_cnt++;
-	
+#endif	
 	if((0xFF == a) || (0xFF == b))
 	{
 		return 0xFF;
@@ -493,9 +495,9 @@ unsigned char gf_div(unsigned char a, unsigned char b)
 		DEBUG_NOTICE("div err.\n");
 		return 0xFF;
 	}
-
+#if (1 == GF_CAL_COUNT)
 	div_cnt++;
-
+#endif
 	//DEBUG_NOTICE("div: %x %x\n", a, b);
 	unsigned char quotient_in_pow = 0;
 	if(a >= b)
@@ -702,11 +704,12 @@ int gf_multp_poly_hw(unsigned char* a, unsigned char len_a,
 	return 0;
 }
 
-unsigned long long real_combine(unsigned long long n, unsigned long long k)
+long long real_combine(long long n, long long k)
 {
+#if (1 == GF_CAL_COUNT)	
 	real_cbm_cnt++;
-	
-	unsigned long long combine_num = 0;
+#endif
+	long long combine_num = 0;
 
 #if 0//it is useless when values are too large
 	int i = 0;
@@ -742,10 +745,11 @@ unsigned long long real_combine(unsigned long long n, unsigned long long k)
 	return combine_num;
 }
 
-unsigned char gf_real_mutp_ff(unsigned long long n, unsigned char ff)
+unsigned char gf_real_mutp_ff(long long n, unsigned char ff)
 {
+#if (1 == GF_CAL_COUNT)	
 	real_mul_ff_cnt++;
-	
+#endif
 	unsigned char val = 0xFF;
 
 	if(0 != (n % 2))
@@ -760,10 +764,11 @@ unsigned char gf_real_mutp_ff(unsigned long long n, unsigned char ff)
 	return val;
 }
 
-unsigned char gf_pow_cal(unsigned char ff, unsigned long long n)
+unsigned char gf_pow_cal(unsigned char ff, long long n)
 {
+#if (1 == GF_CAL_COUNT) 	
 	pow_cnt++;
-	
+#endif	
 	unsigned char val = 0xFF;
 	if(0xFF == ff)
 	{
@@ -807,7 +812,7 @@ unsigned char phase_trans(unsigned char phase)
 }
 
 #if (1 == GF_CAL_COUNT)
-int gf_count_hist(unsigned long long err_cnt)
+int gf_count_hist(long long err_cnt)
 {
 	if(err_num < (CODEWORD_LEN - MESSAGE_LEN - 1))
 	{
