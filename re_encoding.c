@@ -410,19 +410,19 @@ int v_cal()
 
 		for(j = 0; j < (MESSAGE_LEN + 1); j++)
 		{
-			if(0 != j)
+			if(0 != j)//increase degree because of x term
 			{
 				v_tmp_1[j] = v[j - 1];
 				DEBUG_NOTICE("v_tmp_1: %d | %x\n", j, v_tmp_1[j]);
 			}
 
-			v_tmp_2[j] = gf_multp(v[j], rel_group_seq[i + 1]);
+			v_tmp_2[j] = gf_multp(v[j], rel_group_seq[i + 1]);//calculation of a_i term
 			DEBUG_NOTICE("v_tmp_2: %d | %x=%x*%x\n", j, v_tmp_2[j], v[j], rel_group_seq[i]);
 		}
 
 		for(j = 0; j < (MESSAGE_LEN + 1); j++)
 		{
-			v[j] = gf_add(v_tmp_1[j], v_tmp_2[j]);
+			v[j] = gf_add(v_tmp_1[j], v_tmp_2[j]);//add 2 parts
 			DEBUG_NOTICE("v_tmp: %d | %x\n", j, v[j]);
 		}
 	}
@@ -430,6 +430,63 @@ int v_cal()
 	for(i = 0; i < (MESSAGE_LEN + 1); i++)
 	{
 		DEBUG_NOTICE("v: %d | %x\n", i, v[i]);
+	}
+	
+	return 0;
+}
+
+int l_cal(unsigned char locator_j, unsigned char *L)
+{
+	long long i = 0, j = 0;
+	unsigned char v_tmp_1[MESSAGE_LEN + 1], v_tmp_2[MESSAGE_LEN + 1];
+	unsigned char tmp_div = 0, tmp_inv = 0xFF;
+
+	memset(L, 0xFF, sizeof(unsigned char) * MESSAGE_LEN);
+	L[0] = 0;
+
+	for(i = 0; i < MESSAGE_LEN; i++)
+	{
+		if(rel_group_seq[i] == locator_j)
+		{
+			continue;
+		}
+		
+		memset(v_tmp_1, 0xFF, sizeof(unsigned char) * (MESSAGE_LEN + 1));
+		memset(v_tmp_2, 0xFF, sizeof(unsigned char) * (MESSAGE_LEN + 1));
+
+		for(j = 0; j < (MESSAGE_LEN + 0); j++)
+		{
+			v_tmp_1[j + 1] = L[j];//increase degree because of x term
+			DEBUG_NOTICE("v_tmp_1: %d | %x\n", j + 1, v_tmp_1[j + 1]);
+
+			v_tmp_2[j] = gf_multp(L[j], rel_group_seq[i]);//calculation of a_i term
+			DEBUG_NOTICE("v_tmp_2: %d | %x=%x*%x\n", j, v_tmp_2[j], L[j], rel_group_seq[i]);
+		}
+
+		for(j = 0; j < (MESSAGE_LEN + 1); j++)
+		{
+			L[j] = gf_add(v_tmp_1[j], v_tmp_2[j]);//add 2 parts
+			DEBUG_NOTICE("v_tmp: %d | %x\n", j, L[j]);
+		}
+	}
+
+	for(i = 0; i < MESSAGE_LEN; i++)
+	{
+		if(rel_group_seq[i] == locator_j)
+		{
+			continue;
+		}
+
+		tmp_inv = gf_div(0x0, gf_add(locator_j, rel_group_seq[i]));
+		DEBUG_NOTICE("tmp_inv: %d | %x\n", i, tmp_inv);
+		tmp_div = gf_multp(tmp_div, tmp_inv);
+		DEBUG_NOTICE("tmp_div: %d | %x\n", i, tmp_div);
+	}
+
+	for(i = 0; i < (MESSAGE_LEN + 1); i++)
+	{
+		L[i] = gf_multp(L[i], tmp_div);
+		DEBUG_NOTICE("L: %d | %x\n", i, L[i]);
 	}
 	
 	return 0;
@@ -726,7 +783,7 @@ unsigned char coordinate_trans(unsigned char locator, unsigned char r, unsigned 
 	//locator_product = 0;
 	coordinate = gf_div(gf_add(r_hd, r), locator_product);
 	//coordinate = gf_add(r_hd, r);
-	DEBUG_NOTICE("locator_product: %x %x %x %x %x %x\n",
+	DEBUG_NOTICE("locator_product: %x | %x + %x = %x | %x | %x\n",
 				 locator,
 				 r_hd,
 				 r,
@@ -900,12 +957,13 @@ int syndrome_re_encoding(unsigned char *synd)
 	return 0;
 }
 
+#if (1 == RE_ENCODING)
 int bm_re_encoding(unsigned char *msg_phi, unsigned char *tmp_cw)
 {
 	long long i = 0, j = 0;
 	unsigned char tmp = 0xFF, tmp_sum = 0xFF, lambda_root = 0;
-	unsigned char syndrome_tmp[MESSAGE_LEN];
-	unsigned char syndrome[MESSAGE_LEN + 1];
+	unsigned char syndrome_tmp[SYN_LEN];
+	unsigned char syndrome[SYN_LEN + 1];
 	unsigned char lambda[MESSAGE_LEN];
 	unsigned char omega[MESSAGE_LEN];
 	unsigned char err_location[CODEWORD_LEN];
@@ -913,8 +971,8 @@ int bm_re_encoding(unsigned char *msg_phi, unsigned char *tmp_cw)
 	unsigned char v_tmp[MESSAGE_LEN + 1];
 	unsigned char err_mag[CODEWORD_LEN];
 
-	memset(syndrome_tmp, 0xFF, sizeof(unsigned char) * MESSAGE_LEN);
-	memset(syndrome, 0xFF, sizeof(unsigned char) * (MESSAGE_LEN + 1));
+	memset(syndrome_tmp, 0xFF, sizeof(unsigned char) * SYN_LEN);
+	memset(syndrome, 0xFF, sizeof(unsigned char) * (SYN_LEN + 1));
 	memset(lambda, 0x0, sizeof(unsigned char) * MESSAGE_LEN);
 	memset(omega, 0xFF, sizeof(unsigned char) * MESSAGE_LEN);
 	memset(err_location, 0xFF, sizeof(unsigned char) * CODEWORD_LEN);
@@ -947,11 +1005,11 @@ int bm_re_encoding(unsigned char *msg_phi, unsigned char *tmp_cw)
 	syndrome_tmp[4] = 0x2;
 #endif
 
-	memcpy(syndrome_tmp, msg_phi, sizeof(unsigned char) * MESSAGE_LEN);
+	memcpy(syndrome_tmp, msg_phi, sizeof(unsigned char) * SYN_LEN);
 
-	memcpy(syndrome + 1, syndrome_tmp, sizeof(unsigned char) * MESSAGE_LEN);
+	memcpy(syndrome + 1, syndrome_tmp, sizeof(unsigned char) * SYN_LEN);
 
-	for(i = 1; i < (MESSAGE_LEN + 1); i++)
+	for(i = 1; i < (SYN_LEN + 1); i++)
 	{
 		tmp = 0xFF;
 		for(j = 1; j <= L; j++)
@@ -962,12 +1020,12 @@ int bm_re_encoding(unsigned char *msg_phi, unsigned char *tmp_cw)
 		sigma = gf_add(syndrome[i], tmp);
 		DEBUG_NOTICE("sigma: %x %x %x\n", sigma, syndrome[i], tmp);
 
-		for(j = 0; j < MESSAGE_LEN; j++)
+		for(j = 0; j < SYN_LEN; j++)
 		{
 			tmp = gf_multp(B[j], sigma);
 			lambda[j] = gf_add(lambda[j], tmp);
 		}
-		for(j = 0; j < MESSAGE_LEN; j++)
+		for(j = 0; j < SYN_LEN; j++)
 		{
 			DEBUG_NOTICE("lambda: %d %x\n", j, lambda[j]);
 		}
@@ -977,7 +1035,7 @@ int bm_re_encoding(unsigned char *msg_phi, unsigned char *tmp_cw)
 			if(2 * L < (i))
 			{
 				L = (i) - L;
-				for(j = 0; j < MESSAGE_LEN; j++)
+				for(j = 0; j < SYN_LEN; j++)
 				{
 					B[j] = gf_div(lambda_tmp[j], sigma);
 					DEBUG_NOTICE("lambda_tmp: %x %x %x\n", lambda_tmp[j], sigma, B[j]);
@@ -985,22 +1043,22 @@ int bm_re_encoding(unsigned char *msg_phi, unsigned char *tmp_cw)
 			}
 		}
 
-		for(j = (MESSAGE_LEN - 1); j >= 1; j--)
+		for(j = (SYN_LEN - 1); j >= 1; j--)
 		{
 			//DEBUG_NOTICE("B: %d %x %x\n", j, B[j], B[j - 1]);
 			B[j] = B[j - 1];
 		}
 		B[0] = 0xFF;
 		
-		for(j = 0; j < MESSAGE_LEN; j++)
+		for(j = 0; j < SYN_LEN; j++)
 		{
 			DEBUG_NOTICE("B: %d %x\n", j, B[j]);
 		}
 
-		memcpy(lambda_tmp, lambda, sizeof(unsigned char) * MESSAGE_LEN);
+		memcpy(lambda_tmp, lambda, sizeof(unsigned char) * SYN_LEN);
 	}
 
-	for(i = 0; i < MESSAGE_LEN; i++)
+	for(i = 0; i < SYN_LEN; i++)
 	{
 		for(j = 0; j <= i; j++)
 		{
@@ -1030,7 +1088,7 @@ int bm_re_encoding(unsigned char *msg_phi, unsigned char *tmp_cw)
 	}
 	DEBUG_NOTICE("\n");
 
-	for(i = 0; i < (GF_FIELD - 1); i++)
+	for(i = 0; i < (MESSAGE_LEN - 1); i++)
 	{
 		lambda_root = 0xFF;
 		for(j = 0; j < MESSAGE_LEN; j++)
@@ -1207,6 +1265,7 @@ int bm_re_encoding(unsigned char *msg_phi, unsigned char *tmp_cw)
 
 	return 0;
 }
+#endif
 
 int recover_codeword()
 {
@@ -1324,6 +1383,10 @@ int re_encoding()
 #endif
 
 	v_cal();
+#if 0//test
+	unsigned char L[MESSAGE_LEN];
+	l_cal(0x0, L);
+#endif	
 
 	phi_cal();
 	//erasure_decoding(erasure_polynomial);

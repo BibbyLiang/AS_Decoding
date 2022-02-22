@@ -51,7 +51,7 @@ void main()
 	float runtime;
 
 	float eb2n0_start = 10, eb2n0_stop = 10, eb2n0_step = 1, eb2n0 = 10;
-	unsigned long iter_cnt = 2, monitor_cnt = 1;
+	unsigned long iter_cnt = 1, monitor_cnt = 1;
 #if (0 == TEST_MODE)
 #if 1
 	printf("Please Input Eb/N0 Start: ");
@@ -124,11 +124,11 @@ void main()
 			//memset(message_polynomial, 0x0, sizeof(unsigned char) * MESSAGE_LEN);
 
 #if (1 == TEST_MODE)//test
-			message_polynomial[0] = 0x1;
-			message_polynomial[1] = 0x0;
-			message_polynomial[2] = 0x5;
-			message_polynomial[3] = 0x5;
-			message_polynomial[4] = 0x6;
+			message_polynomial[0] = 0x0;
+			message_polynomial[1] = 0x1;
+			message_polynomial[2] = 0x2;
+			message_polynomial[3] = 0x3;
+			message_polynomial[4] = 0x4;
 			//message_polynomial[5] = 0xC;
 			//message_polynomial[6] = 0xA;
 			//memset(message_polynomial, 0x0, sizeof(unsigned char) * MESSAGE_LEN);
@@ -170,7 +170,7 @@ void main()
 #else
 			memcpy(received_polynomial, encoded_polynomial, sizeof(unsigned char) * CODEWORD_LEN);
 			received_polynomial[1] = gf_add(encoded_polynomial[1], 0x2);
-			received_polynomial[3] = gf_add(encoded_polynomial[3], 0x0);
+			//received_polynomial[3] = gf_add(encoded_polynomial[3], 0x0);
 			//received_polynomial[4] = gf_add(encoded_polynomial[4], 0x5);
 			//received_polynomial[5] = gf_add(encoded_polynomial[5], 0x0);
 			//received_polynomial[9] = gf_add(encoded_polynomial[9], 0x2);

@@ -15,12 +15,14 @@ extern unsigned char omega[CODEWORD_LEN - MESSAGE_LEN];
 extern unsigned char sigma[((CODEWORD_LEN - MESSAGE_LEN) + (CODEWORD_LEN - MESSAGE_LEN + 1) - 1) - (CODEWORD_LEN - MESSAGE_LEN)];
 extern unsigned char erasure_polynomial[CODEWORD_LEN];
 extern unsigned char phi[CODEWORD_LEN];
+extern unsigned char v[MESSAGE_LEN + 1];
 #if (1 == RE_ENCODING)
 extern unsigned char re_encoded_codeword[CODEWORD_LEN];
 #endif
 
 extern int chnl_rel_cal(float **input_seq, long long input_len);
 extern int mul_assign();
+extern int l_cal(unsigned char locator_j, unsigned char *L);
 extern int tao_cal();
 extern unsigned char poly_eva(unsigned char *poly, long long poly_len, unsigned char input_val);
 extern int bm_re_encoding(unsigned char *msg_phi, unsigned char *tmp_cw);
