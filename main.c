@@ -27,6 +27,14 @@ void init_simulation()
 #endif
 	DEBUG_SYS("init_simulation OK\n");
 
+	g_term_malloc();
+
+	mod_init();
+
+#if (1 == SYS_ENC)
+	gen_poly_trans();
+#endif
+
 	return;
 }
 
@@ -50,6 +58,7 @@ void main()
 	clock_t start, stop;
 	float runtime;
 
+	/*input simulation parameters*/
 	float eb2n0_start = 10, eb2n0_stop = 10, eb2n0_step = 1, eb2n0 = 10;
 	unsigned long iter_cnt = 1, monitor_cnt = 1;
 #if (0 == TEST_MODE)
@@ -68,6 +77,7 @@ void main()
 #endif
 
 #if (1 == OUTPUT_LOG)
+	/*init file log*/
 	char log_name[255];
 	sprintf(log_name, "n_%d-k_%d-m_%d-ret_%d-snr_%f_%f_%f-cnt_%ld_%ld.txt",
 					  CODEWORD_LEN,
@@ -82,20 +92,14 @@ void main()
 	FILE *frc;
 #endif
 
-	g_term_malloc();
-
-	mod_init();
-
 	init_simulation();
-
-#if (1 == SYS_ENC)
-	gen_poly_trans();
-#endif
 
 	start = clock();
 
+	/*for SNR*/
 	for(eb2n0 = eb2n0_start; eb2n0 <= eb2n0_stop; eb2n0 = eb2n0 + eb2n0_step)
 	{
+		/*init counts for certain SNR*/
 		bit_err = 0;
 		symbol_err = 0;
 		symbol_err_prev = 0;
@@ -105,13 +109,16 @@ void main()
 		uncoded_frame_err = 0;
 		hamm_err = 0;
 
+		/*for every frame*/
 		for(iter = 0; iter < iter_cnt; iter++)
 		{
+			/*clear some counts for this frame*/
 			decoding_ok_flag = 0;
 			err_num = 0;
 			memset(recv_rel, 0.0, sizeof(float) * CODEWORD_LEN);
-			symbol_err_prev = symbol_err;
+			symbol_err_prev = uncoded_symbol_err;
 
+			/*generate messages*/
 			for(i = 0; i < MESSAGE_LEN; i++)
 			{
 				j = genrand_int32() % GF_FIELD;
@@ -123,17 +130,19 @@ void main()
 			}
 			//memset(message_polynomial, 0x0, sizeof(unsigned char) * MESSAGE_LEN);
 
-#if (1 == TEST_MODE)//test
-			message_polynomial[0] = 0x0;
-			message_polynomial[1] = 0x1;
-			message_polynomial[2] = 0x2;
-			message_polynomial[3] = 0x3;
-			message_polynomial[4] = 0x4;
+#if (1 == TEST_MODE)
+			/*generate messages for test mode*/
+			message_polynomial[0] = 0x2;
+			message_polynomial[1] = 0x5;
+			message_polynomial[2] = 0x6;
+			message_polynomial[3] = 0x5;
+			message_polynomial[4] = 0x1;
 			//message_polynomial[5] = 0xC;
 			//message_polynomial[6] = 0xA;
 			//memset(message_polynomial, 0x0, sizeof(unsigned char) * MESSAGE_LEN);
 #endif
 
+			/*encoding*/
 #if (1 == SYS_ENC)
 			//systematic_encoding();
 			encoding2();
@@ -141,11 +150,13 @@ void main()
 			evaluation_encoding();
 #endif
 
+			/*modulation*/
 			bpsk_mod(encoded_polynomial,
 					 CODEWORD_LEN,
 					 recv_seq,
 					 symbol_num);
 
+			/*transmission over channel*/
 			DEBUG_IMPOTANT("Transmission over Channel:\n");
 			for(i = 0; i < symbol_num; i++)
 			{
@@ -155,13 +166,14 @@ void main()
 			}
 			DEBUG_IMPOTANT("\n");
 
+			/*demodulation*/
 			bpsk_demod((float **)recv_seq,
 					 symbol_num,
 					 received_polynomial,
 					 CODEWORD_LEN);
 
+			/*add errors for test mode*/
 #if (1 == TEST_MODE)//test
-			/*transmission through channel*/
 #if 0
 			for(i = 0; i < CODEWORD_LEN; i++)
 			{
@@ -169,9 +181,9 @@ void main()
 			}
 #else
 			memcpy(received_polynomial, encoded_polynomial, sizeof(unsigned char) * CODEWORD_LEN);
-			received_polynomial[1] = gf_add(encoded_polynomial[1], 0x2);
-			//received_polynomial[3] = gf_add(encoded_polynomial[3], 0x0);
-			//received_polynomial[4] = gf_add(encoded_polynomial[4], 0x5);
+			//received_polynomial[0] = gf_add(encoded_polynomial[0], 0x1);
+			//received_polynomial[3] = gf_add(encoded_polynomial[3], 0x1);
+			received_polynomial[4] = gf_add(encoded_polynomial[4], 0x0);
 			//received_polynomial[5] = gf_add(encoded_polynomial[5], 0x0);
 			//received_polynomial[9] = gf_add(encoded_polynomial[9], 0x2);
 			//received_polynomial[0] = 0x5;
@@ -184,6 +196,7 @@ void main()
 #endif
 #endif
 
+			/*count uncoded errors*/
 			for(i = 0; i < CODEWORD_LEN; i++)
 			{
 				DEBUG_NOTICE("%x %x\n", received_polynomial[i], encoded_polynomial[i]);
@@ -211,22 +224,28 @@ void main()
 				}
 			}
 
+			/*channel reliability calculation*/
 #if (1 == RE_ENCODING)
 			chnl_rel_cal(recv_seq, symbol_num);
 #endif
 
+			/*nultiplicity assignment*/
 			mul_assign();
-			
+
+			/*re-encoding transform*/
 			re_encoding();
-			
+
+			/*GS decoding*/
 			as_decoding();
 
-#if (1 == GF_CAL_COUNT)			
+#if (1 == GF_CAL_COUNT)
+			/*count gf field calculating complexity*/
 			gf_count_hist(symbol_err_this_frame);
 			symbol_err_this_frame = 0;
 #endif
 			uncoded_frame_err_flag = 0;
 
+			/*count decoded errors*/
 			for(i = 0; i < MESSAGE_LEN; i++)
 			{
 				DEBUG_NOTICE("%x %x\n", decoded_message[i], message_polynomial[i]);
@@ -247,10 +266,10 @@ void main()
 							bit_err = bit_err + 1;
 						}
 					}
-					
 				}
 			}
 
+			/*print program error*/
 			if((1 == decoding_ok_flag)
 				&& (1 == frame_err_flag))
 			{
@@ -273,20 +292,24 @@ void main()
 					fprintf(frc, "Prog. Err. for Decoding\n");
 #endif					
 
-					DEBUG_SYS("Para.: %ld %ld %ld %ld\n",
+					DEBUG_SYS("Para.: %ld %ld %ld %ld %ld %ld\n",
 							  (S_MUL * (CODEWORD_LEN - err_num)),
 							  weight_stored,
 							  hamm_distance_debug,
-							  symbol_err - symbol_err_prev);
+							  uncoded_symbol_err,
+							  symbol_err_prev,
+							  uncoded_symbol_err - symbol_err_prev);
 #if (1 == OUTPUT_LOG)
-					fprintf(frc, "Para.: %ld %ld %ld %ld\n",
+					fprintf(frc, "Para.: %ld %ld %ld %ld %ld %ld\n",
 							(S_MUL * (CODEWORD_LEN - err_num)),
 							weight_stored,
 							hamm_distance_debug,
-							symbol_err - symbol_err_prev);
+							uncoded_symbol_err,
+							symbol_err_prev,
+							uncoded_symbol_err - symbol_err_prev);
 #endif
 
-#if (0 == RE_ENCODING)
+#if (1 == RE_ENCODING)
 
 					for(i = 0; i < MESSAGE_LEN; i++)
 					{
@@ -318,6 +341,13 @@ void main()
 					}
 
 #endif
+					for(i = 0; i < (CODEWORD_LEN - MESSAGE_LEN); i++)
+					{
+						DEBUG_SYS("unrel_group_seq: %d\n", unrel_group_seq[i]);
+#if (1 == OUTPUT_LOG)						
+						fprintf(frc, "unrel_group_seq: %d\n", unrel_group_seq[i]);
+#endif
+					}
 #if (1 == OUTPUT_LOG)
 					fclose(frc);
 					frc = NULL;
@@ -331,6 +361,8 @@ void main()
 				rr_err_cnt = rr_err_cnt + 1;
 			}
 #endif
+
+			/*output ongoing results*/
 			if(0 == (iter % monitor_cnt))
 			{
 				stop = clock();
@@ -385,7 +417,8 @@ void main()
 				fprintf(frc, "RCB Cnt: %ld\n", real_cbm_cnt);
 				fprintf(frc, "RMF Cnt: %ld\n", real_mul_ff_cnt);
 				fprintf(frc, "Pow Cnt: %ld\n", pow_cnt);
-#endif				
+#endif
+				fprintf(frc, "TERM_SIZE: %ld %ld\n", term_size_x, term_size_y);
 			    fclose(frc);
 				frc = NULL;
 #endif
@@ -397,7 +430,7 @@ void main()
 					{
 						//DEBUG_SYS("-------------------\n");
 						//DEBUG_SYS("Err Hist: %ld %ld\n", k, err_hist[k]);
-						DEBUG_SYS("Add/Mul Hist: %ld %f %f\n", k, (float)(add_cnt_hist[k] / err_hist[k]), (float)(mul_cnt_hist[k] / err_hist[k]));
+						DEBUG_SYS("Add/Mul Hist: %ld %f %f\n", k, (float)(add_cnt_hist[k] / err_hist[k]), (float)((mul_cnt_hist[k] + div_cnt_hist[k]) / err_hist[k]));
 						//DEBUG_SYS("Mul Hist: %ld %f\n", k, (float)(mul_cnt_hist[k] / err_hist[k]));
 						//DEBUG_SYS("Div Hist: %ld %f\n", k, (float)(div_cnt_hist[k] / err_hist[k]));
 						//DEBUG_SYS("RCB Hist: %ld %f\n", k, (float)(real_cbm_cnt_hist[k] / err_hist[k]));
@@ -408,7 +441,7 @@ void main()
 						frc = fopen(log_name, "a+");
 						//fprintf(frc, "-------------------\n");
 						//fprintf(frc, "Err Hist: %ld %ld\n", k, err_hist[k]);
-						fprintf(frc, "Add/Mul Hist: %ld %f %f\n", k, (float)(add_cnt_hist[k] / err_hist[k]), (float)(mul_cnt_hist[k] / err_hist[k]));
+						fprintf(frc, "Add/Mul Hist: %ld %f %f\n", k, (float)(add_cnt_hist[k] / err_hist[k]), (float)((mul_cnt_hist[k] + div_cnt_hist[k]) / err_hist[k]));
 						//fprintf(frc, "Mul Hist: %ld %f\n", k, (float)(mul_cnt_hist[k] / err_hist[k]));
 						//fprintf(frc, "Div Hist: %ld %f\n", k, (float)(div_cnt_hist[k] / err_hist[k]));
 						//fprintf(frc, "RCB Hist: %ld %f\n", k, (float)(real_cbm_cnt_hist[k] / err_hist[k]));
@@ -438,6 +471,7 @@ void main()
 		stop = clock();
 		runtime = (stop - start) / 1000.0000;
 
+		/*output final results*/
 		DEBUG_SYS("*********************************\n");
 		DEBUG_SYS("Time: %fs\n", runtime);
 		DEBUG_SYS("Eb/N0: %f dB\n", eb2n0);
@@ -518,6 +552,8 @@ void main()
 	free(mod_seq);
 	mod_seq = NULL;
 #endif
+
+	/*clear and exit*/
 	mod_exit();
 
 #if (0 == TEST_MODE)

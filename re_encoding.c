@@ -355,13 +355,13 @@ int rel_group()
 		}
 	}
 
-#if (1 == TEST_MODE)
-	rel_group_seq[0] = 1;
-	rel_group_seq[1] = 2;
-	rel_group_seq[2] = 3;
-	rel_group_seq[3] = 4;
-	rel_group_seq[4] = 5;
-	unrel_group_seq[0] = 0;
+#if (1 == TEST_MODE)//just for GF(8) test
+	rel_group_seq[0] = 0;
+	rel_group_seq[1] = 1;
+	rel_group_seq[2] = 2;
+	rel_group_seq[3] = 3;
+	rel_group_seq[4] = 4;
+	unrel_group_seq[0] = 5;
 	unrel_group_seq[1] = 6;
 	//unrel_group_seq[2] = 4;
 	//unrel_group_seq[3] = 5;
@@ -1088,7 +1088,7 @@ int bm_re_encoding(unsigned char *msg_phi, unsigned char *tmp_cw)
 	}
 	DEBUG_NOTICE("\n");
 
-	for(i = 0; i < (MESSAGE_LEN - 1); i++)
+	for(i = 0; i < CODEWORD_LEN; i++)//search for root
 	{
 		lambda_root = 0xFF;
 		for(j = 0; j < MESSAGE_LEN; j++)
@@ -1260,6 +1260,7 @@ int bm_re_encoding(unsigned char *msg_phi, unsigned char *tmp_cw)
 
 	for(i = 0; i < CODEWORD_LEN; i++)
 	{
+		//DEBUG_INFO("rootff: %ld %x\n", i, g_term_c_p[0][0][0]);//for memory test
 		tmp_cw[i] = gf_add(received_polynomial[i], err_mag[i]);
 	}
 

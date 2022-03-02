@@ -56,8 +56,8 @@ long long sml_poly = 0xFF;
 unsigned char decoded_codeword[CODEWORD_LEN];
 unsigned char decoded_message[MESSAGE_LEN];
 unsigned char tmp_message[MESSAGE_LEN];
-unsigned char tmp_codeword[MESSAGE_LEN];
-long long best_hamm_distance_code, best_hamm_distance_bit;
+unsigned char tmp_codeword[CODEWORD_LEN];
+long long best_hamm_distance_code = 0x7FFF, best_hamm_distance_bit = 0x7FFF;
 
 unsigned char ***g_term_c_p;
 unsigned char g_term_phase = 0;
@@ -863,6 +863,7 @@ int koetter_interpolation()
 	memset(tmp_v, 0xFF, sizeof(unsigned char) * (term_size_x * term_size_y));
 	memset(tmp_q0, 0xFF, sizeof(unsigned char) * (term_size_x * term_size_y));
 	memset(tmp_q1, 0xFF, sizeof(unsigned char) * (term_size_x * term_size_y));
+
 	j = 0;
 	for(i = 0; i < (term_size_x * term_size_y); i++)
 	{
@@ -876,6 +877,7 @@ int koetter_interpolation()
 			break;
 		}
 	}
+
 	for(i = 0; i < (term_size_x * term_size_y); i++)
 	{
 		if((0xFF != g_term_c_p[g_term_phase][0][i])
@@ -884,6 +886,7 @@ int koetter_interpolation()
 			tmp_q0[i] = g_term_c_p[g_term_phase][0][i];
 		}
 	}
+
 	for(i = 0; i < (term_size_x * term_size_y); i++)
 	{
 		if((0xFF != g_term_c_p[g_term_phase][0][i])
@@ -892,10 +895,12 @@ int koetter_interpolation()
 			tmp_q1[i] = g_term_c_p[g_term_phase][0][i];
 		}
 	}
+
 	poly_mul(tmp_q0,
 		     tmp_v,
 		     tmp_product,
 		     term_size_x * term_size_y);
+
 	for(i = 0; i < (term_size_x * term_size_y); i++)
 	{
 		if(0 != g_term_y[i])
@@ -908,6 +913,17 @@ int koetter_interpolation()
 				         g_term_x[i],
 				         g_term_y[i],
 				         tmp_product[i]);
+
+			if(g_term_x[i] > max_dx)
+			{
+				max_dx = g_term_x[i];
+				//DEBUG_SYS("max_dx: %ld\n", max_dx);
+			}
+			if(g_term_y[i] > max_dy)
+			{
+				max_dy = g_term_y[i];
+				//DEBUG_SYS("max_dy: %ld\n", max_dy);
+			}
 		}
 	}
 	memcpy(g_term_c_p[g_term_phase][0], tmp_product, sizeof(unsigned char) * (term_size_x * term_size_y));
@@ -1168,6 +1184,7 @@ int g_term_malloc()
 	}
 	term_size_y = (long long)((S_MUL + 0.5) * sqrt(CODEWORD_LEN / (MESSAGE_LEN - 1))) + 2;
 	term_size_x = s_x + term_size_y * (MESSAGE_LEN + 1) + 2;
+	//term_size_x = 5;
 	DEBUG_SYS("term_size: %ld %ld\n", term_size_x, term_size_y);
 
 	g_term_c_p = (unsigned char***)malloc(sizeof(unsigned char**) * LAYER_NUM);
@@ -2224,8 +2241,13 @@ unsigned char g_term_x_0_cal_recur(unsigned char *g_c_in)
 {
 	unsigned char val = 0xFF;
 	long long j = 0;
-
+	
+#if (1 == DYNAMIC_MEM)
+	unsigned char *g_c_x_0;
+	g_c_x_0 = (unsigned char*)malloc(sizeof(unsigned char) * (term_size_x * term_size_y));
+#else
 	unsigned char g_c_x_0[term_size_x * term_size_y];
+#endif
 	memset(g_c_x_0, 0xFF, sizeof(unsigned char) * (term_size_x * term_size_y));
 
 	for(j = 0; j < (term_size_x * term_size_y); j++)
@@ -2242,6 +2264,11 @@ unsigned char g_term_x_0_cal_recur(unsigned char *g_c_in)
 
 		val = gf_add(val, g_c_x_0[j]);
 	}
+
+#if (1 == DYNAMIC_MEM)
+	free(g_c_x_0);
+	g_c_x_0 = NULL;
+#endif
 
 	return val;
 }
@@ -2529,15 +2556,23 @@ int check_rr_decoded_result_recur(unsigned char *msg)
 	bm_re_encoding(msg, tmp_codeword);
 #endif
 
+#if (CFG_RR_MODE == CONV_RE_ENC_SYS)
+	/*tmp_codeword has been calculated in dfs_rr_recur.*/
+#endif
+
+#if (CFG_RR_MODE >= CONV_RE_ENC)
+	evaluation_encoding_v2(msg, tmp_codeword);
+#endif
+
 #endif
 
 	for(i = 0; i < MESSAGE_LEN; i++)
 	{
-		DEBUG_INFO("msg: %ld %x\n", i, msg[i]);
+		DEBUG_NOTICE("msg: %ld %x\n", i, msg[i]);
 	}
 	for(i = 0; i < CODEWORD_LEN; i++)
 	{
-		DEBUG_INFO("tmp_decoded_codeword: %ld %x\n", i, tmp_codeword[i]);
+		DEBUG_NOTICE("tmp_decoded_codeword: %ld %x\n", i, tmp_codeword[i]);
 	}
 
 #if (1 == RE_ENCODING)
@@ -2549,7 +2584,7 @@ int check_rr_decoded_result_recur(unsigned char *msg)
 	tmp_bit = hamm_distance_bit_cal(tmp_codeword, received_polynomial, CODEWORD_LEN);
 #endif
 
-	DEBUG_NOTICE("distance: %d %d\n", tmp_code, tmp_bit);
+	DEBUG_NOTICE("distance: %d %d | %d %d\n", tmp_code, tmp_bit, best_hamm_distance_code, best_hamm_distance_bit);
 
 	if(tmp_code < best_hamm_distance_code)
 	{
@@ -2586,8 +2621,9 @@ int check_rr_decoded_result_recur(unsigned char *msg)
 	}
 
 #if 1//(0 == RE_ENCODING)
-	hamm_distance_debug = hamm_distance_code_cal(msg, message_polynomial, MESSAGE_LEN);		
-	DEBUG_IMPOTANT("Hamming Distance Debug: %ld\n", hamm_distance_debug);
+	//hamm_distance_debug = hamm_distance_code_cal(msg, message_polynomial, MESSAGE_LEN);
+	hamm_distance_debug = hamm_distance_code_cal(tmp_codeword, encoded_polynomial, CODEWORD_LEN);
+	DEBUG_NOTICE("Hamming Distance Debug: %ld\n", hamm_distance_debug);
 
 	if(0 == hamm_distance_debug)
 	{
@@ -2770,16 +2806,20 @@ int rr_factorization_recur()
 	unsigned char root = 0xFF;
 
 #if (1 == DYNAMIC_MEM)
-	unsigned char *g_c_q, *g_c_0_y;
+	unsigned char *g_c_q, *g_c_0_y, *g_c_q_origin;
 	g_c_q = (unsigned char*)malloc(sizeof(unsigned char) * (term_size_x * term_size_y));
 	g_c_0_y = (unsigned char*)malloc(sizeof(unsigned char) * (term_size_x * term_size_y));
+	g_c_q_origin = (unsigned char*)malloc(sizeof(unsigned char) * (term_size_x * term_size_y));
 #else
 	unsigned char g_c_q[term_size_x * term_size_y], g_c_0_y[term_size_x * term_size_y];
 #endif
 
+	memcpy(g_c_q_origin, g_term_c_p[g_term_phase][0], sizeof(unsigned char) * (term_size_x * term_size_y));
+
 	for(i = 0; i < GF_FIELD; i++)//test roots
 	{
-		memcpy(g_c_q, g_term_c_p[g_term_phase][0], sizeof(unsigned char) * (term_size_x * term_size_y));
+		//DEBUG_INFO("root00: %ld %ld %x\n", 0, i, g_term_c_p[g_term_phase][0][0]);
+		memcpy(g_c_q, g_c_q_origin, sizeof(unsigned char) * (term_size_x * term_size_y));
 		g_term_0_y_cal_recur(g_c_q, g_c_0_y);
 
 		is_root = chien_searching_for_g_0_y_recur(g_c_0_y, power_polynomial_table[i][0]);
@@ -2790,11 +2830,11 @@ int rr_factorization_recur()
 			g_term_new_gen_recur(g_c_q, root);
 
 			DEBUG_INFO("root: %ld %ld %x\n", 0, i, root);
-
+			
 			dfs_rr_recur(g_c_q,
 						  g_c_0_y,
 						  1);
-			DEBUG_INFO("root1: %ld %ld %x\n", 0, i, root);
+			DEBUG_INFO("root11: %ld %ld %x\n", 0, i, root);
 		}
 	}
 
@@ -2803,6 +2843,8 @@ int rr_factorization_recur()
 	g_c_q = NULL;
 	free(g_c_0_y);
 	g_c_0_y = NULL;
+	free(g_c_q_origin);
+	g_c_q_origin = NULL;
 #endif
 
 	return 0;
@@ -2859,6 +2901,7 @@ long long hamm_distance_code_cal(unsigned char *a,
 	{
 		if(a[i] != b[i])
 		{
+			DEBUG_NOTICE("hamm_distance_cal: %d %d\n", a[i], b[i]);
 			hamm_distance = hamm_distance + 1;
 		}
 	}
@@ -3075,12 +3118,13 @@ int term_size_adjust()
 	if((max_dx * DYNAMIC_TERM_X - max_dx) <= 2)
 #endif
 	{
-		term_size_x = max_dx + 2;
+		term_size_x = max_dx + 5;
 	}
 	else
 	{
-		term_size_x = max_dx * DYNAMIC_TERM_X + 2;
+		term_size_x = max_dx * DYNAMIC_TERM_X + 5;
 	}
+	//term_size_x = 968;
 #if 0	
 	if((((max_dy * DYNAMIC_TERM_Y - term_size_y) <= 2)
 			&& ((max_dy * DYNAMIC_TERM_Y) >= term_size_y))

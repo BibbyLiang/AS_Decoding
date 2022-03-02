@@ -34,6 +34,7 @@ extern long long hamm_distance_debug;
 extern long long rr_err;
 extern long long max_dx, max_dy;
 extern long long term_size_x, term_size_y;
+extern unsigned char ***g_term_c_p;
 
 extern int as_decoding();
 extern int g_term_malloc();
