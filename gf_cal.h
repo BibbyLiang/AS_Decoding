@@ -24,6 +24,7 @@
 extern unsigned char power_polynomial_table[GF_FIELD][2];
 
 #if (1 == GF_CAL_COUNT)
+extern unsigned char cnt_switch;
 extern long long add_cnt;
 extern long long mul_cnt;
 extern long long div_cnt;

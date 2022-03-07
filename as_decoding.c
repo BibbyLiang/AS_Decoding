@@ -853,6 +853,10 @@ int koetter_interpolation()
 		}
 	}
 
+#if (1 == GF_CAL_COUNT)
+	cnt_switch = 1;
+#endif
+
 /*for re-encoding test(polynomial calculating method)*/
 #if (CFG_RR_MODE >= CONV_RE_ENC_SYS)
 	unsigned char tmp_product[term_size_x * term_size_y];
@@ -2474,7 +2478,21 @@ int g_term_new_gen_recur(unsigned char *g_c_in, unsigned char root_insert)
 				    g_term_y[r],
 					g_c_in[r]);
 		}
-#endif		
+#endif
+
+		if(0xFF != g_c_in[r])
+		{
+			if(g_term_x[r] > max_dx)
+			{
+				max_dx = g_term_x[r];
+				//DEBUG_SYS("max_dx: %ld\n", max_dx);
+			}
+			if(g_term_y[r] > max_dy)
+			{
+				max_dy = g_term_y[r];
+				//DEBUG_SYS("max_dy: %ld\n", max_dy);
+			}
+		}
 	}
 
 	DEBUG_NOTICE("*********************\n");
@@ -3205,7 +3223,7 @@ int as_decoding()
 
 	stop = clock();
 	runtime = (stop - start) / 1000.0000;
-	//DEBUG_SYS("Time3 %fs\n", runtime);
+	//DEBUG_SYS("Time3 %fs\n", runtime);	
 
 #if (CFG_RR_MODE == FAST_RR_M1)
 	fast_msg_get();
@@ -3230,6 +3248,10 @@ int as_decoding()
 	recover_codeword();
 #endif
 
+#endif
+
+#if (1 == GF_CAL_COUNT)
+	cnt_switch = 0;
 #endif
 
 #if (1 == DYNAMIC_TERM)

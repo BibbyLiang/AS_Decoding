@@ -309,6 +309,8 @@ void main()
 							uncoded_symbol_err - symbol_err_prev);
 #endif
 
+#if 0
+
 #if (1 == RE_ENCODING)
 
 					for(i = 0; i < MESSAGE_LEN; i++)
@@ -348,6 +350,9 @@ void main()
 						fprintf(frc, "unrel_group_seq: %d\n", unrel_group_seq[i]);
 #endif
 					}
+					
+#endif					
+					
 #if (1 == OUTPUT_LOG)
 					fclose(frc);
 					frc = NULL;

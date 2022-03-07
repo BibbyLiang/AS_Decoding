@@ -1,8 +1,8 @@
 #ifndef CFG_DECODING_H
 #define CFG_DECODING_H
 
-#define GF_Q			 3
-#define GF_CAL_COUNT	 0
+#define GF_Q			 8
+#define GF_CAL_COUNT	 1
 
 #define SYS_ENC			 1
 
@@ -14,7 +14,7 @@
 
 #define RELEX_ORDER				1
 #define SIMPLE_ASD				0
-#define RE_ENCODING				0
+#define RE_ENCODING				1
 #define RECUR_RR				1
 #define DYNAMIC_MEM				1
 #define REDUNDANT_SIZE			0
@@ -25,7 +25,7 @@
 #define DYNAMIC_TERM_Y			10/9
 #endif
 #if (1 == RE_ENCODING)
-#define SYN_LEN		(MESSAGE_LEN / 2 * 2)//need to be checked
+#define SYN_LEN		(MESSAGE_LEN / 40 * 2)//need to be checked
 #endif
 
 #define S_MUL					1
@@ -52,6 +52,6 @@
 #if (0 == RE_ENCODING)
 #define CFG_RR_MODE			0
 #else
-#define CFG_RR_MODE			FAST_RR_M1
+#define CFG_RR_MODE			BMA_RR
 #endif
 #endif
